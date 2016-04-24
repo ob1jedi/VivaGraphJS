@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Graph Engine</title>
+    <script type="text/javascript" src="dist/vivagraph.js"></script>
+	<script type="text/javascript" src="custom/Data1.json"></script>
+    <!--
+    This example uses jQuery, but it's only for convenience of listenting
+    to DOM events. The jQuery can be replaced with your favorite library.
+     -->
+    <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+    <script type="text/javascript">
+
+//==========Globals ==================================================================================================================================================================			
+		var labelsList = [];
+		var nodeList = [];
+		var checkedNodes = [];
+		var displayLabels = [];
+
+		var neo4jUserToken = '';
+		var selectedNodeID = '';
+		var selectedNodeData = '';
+		var selectedNode = '';
+		var selectedNodeUI = '';
+		var bRelate = false;
+		var counter = 10;	
+		var defaultNeo4jUsername = 'neo4j';
+		var defaultNeo4jPassword = 'password1234$';
+		
+		//Singletons...
+		var GRAPH = '';
+		var graphics = '';
+		var layout = '';
+		var renderer = '';
+		
+		
+//VISUAL SETTINGS		
+		var hiddenLabels = [
+			'JSON_OBJECT', 
+			'ELEMENT', 
+			'JSON_NUMBER',
+			'JSON_STRING',
+			'SCHEMA_ROOT',
+			'ROOT',
+			'COLLECTION'
+		];
+		var MaxLabelLength = 5; //the amount of characters allowed before elipse
+		var labelSize = 30;
+		
+		
+//MODELS	
+		function datax() {
+		  this.id = 0;
+		  this.labels = [];
+		  this.nodeSize = 25;
+		  this.nodeColor = '#ffffff'
+		  this.nodeOpacity = '0.5'
+		  this.textColor = '#ffffff'
+		  this.displayLabel = '';
+		  this.isPinned = false; 
+		}
+		function neoLabel(setName, setColor)
+		{
+			this.name = setName;
+			this.color = setColor;
+			return this;
+		}
+		function getNeoLabel(byName)
+		{
+			var x;
+				labelsList.forEach(function(labelobj, index){
+				if (labelobj.name == byName){
+					x = labelobj;
+					return labelobj;
+				}
+			});
+			return x;
+		}
+
+//CUSTOM GRAPH FUNCTIONS
+		function Neo4j_Connect()
+		{ //This just creates a base64 string from the users Neo4j creds, 
+		  //which then gets passed in as authentication along with their API call.
+			connectUser();
+			hideNeo4jConnect();
+		}
+		
+		function addDataNode(nodeId, nodeData)
+		{
+			nodeData.labels.forEach(function(label, index){
+				if(!getNeoLabel(label)) {
+					var randomColor = rgb2hex(getRandomArbitrary(100,200),getRandomArbitrary(100,200),getRandomArbitrary(100,200));
+					var newLabel = new neoLabel(label, randomColor);
+					labelsList.push(newLabel);
+					addVisLabel(newLabel, labelsList.length-1);
+				}
+				
+				//Don't show hidden labels...
+				if (hiddenLabels.indexOf(label) < 0){
+					if (nodeData.displayLabel) {nodeData.displayLabel += ','}
+					nodeData.displayLabel = nodeData.displayLabel + label;
+				}
+			});
+			
+			//nodeData.displayLabel;
+			var aNeoLabel = getNeoLabel(nodeData.labels[0]);
+			if (aNeoLabel) {nodeData.nodeColor = aNeoLabel.color;}
+			var newNode = GRAPH.addNode(nodeId,nodeData);
+			nodeList.push(newNode);
+			//var newNodeUI = graphics.getNodeUI(nodeId);
+			//var textWidth = newNodeUI.children[2];
+			//console.log(textWidth);
+			//newNodeUI.children[2].attr('x', -textWidth/2);
+			
+		}
+				
+		function addDataLink(fromNode, toNode)
+		{
+			var link = GRAPH.addLink(fromNode, toNode, { connectionStrength: 110 });
+			
+			//var otherLinks = GRAPH.getLinks(fromNode);
+			//otherLinks.forEach(function(otherlink) {
+			//	otherlink.data.connectionStrength+= 1;
+			//});
+			
+			var linkUI = graphics.getLinkUI(link.id);
+			linkUI.attr('fromNode',fromNode).attr('toNode',toNode);
+			increaseNodeSize(fromNode);
+		}
+			
+		function unPinNode()
+		{
+			layout.pinNode(selectedNode, false);
+			selectedNode.data.isPinned = false;
+		}
+		
+		function increaseNodeSize(nodeId)
+		{
+			if (!nodeId){nodeId = selectedNodeID;}
+			var node = GRAPH.getNode(nodeId);
+			node.data.nodeSize = node.data.nodeSize * 1.1;
+			GRAPH.addNode(node.id,node.data);
+		}		
+		
+		function decreaseNodeSize(nodeId)
+		{
+			if (!nodeId){nodeId = selectedNodeID;}
+			var node = GRAPH.getNode(nodeId);
+			node.data.nodeSize = node.data.nodeSize / 1.1;
+			GRAPH.addNode(node.id,node.data);
+		}	
+		
+		function highlightLabel(labelIndex)
+		{
+			var label = labelsList[labelIndex];
+			checkedNodes.forEach(function(node){
+				var nodeUI = graphics.getNodeUI(node.id);
+				nodeUI.children[0].attr('stroke','transparent');
+			});
+			checkedNodes = [];
+			nodeList.forEach(function(node){
+				if (node.data.labels.indexOf(label.name) > -1){
+					console.log(labelIndex);
+					var nodeUI = graphics.getNodeUI(node.id);
+					nodeUI.children[0].attr('stroke','#3399ff');
+					checkedNodes.push(node);
+				}
+				
+			});
+		}
+		
+//USEFULL FUNCTIONS
+		//convert string to Base64
+		//var encodedData = window.btoa(stringToEncode);
+
+		// Returns a random number between min (inclusive) and max (exclusive)
+		function getRandomArbitrary(min, max) {
+			return Math.random() * (max - min) + min;
+		}
+		//RGB to #HEX
+		function rgb2hex(red, green, blue) {
+				var rgb = blue | (green << 8) | (red << 16);
+				return '#' + (0x1000000 + rgb).toString(16).slice(1)
+		  }
+
+		
+		function sleepFor( sleepDuration ){
+			var now = new Date().getTime();
+			while(new Date().getTime() < now + sleepDuration){ /* do nothing */ } 
+		}
+		
+		function postJSONtoURL(successCallback, body, authToken)
+		{
+			var URL = "http://localhost:7474/db/data/transaction HTTP/1.1";
+			//var body = '{"statements" : [ { "statement" : "MATCH (n) RETURN id(n),labels(n)"} ]}';
+	
+			$.ajax({
+					url: 'http://localhost:7474/db/data/transaction/commit',
+					type: 'post',
+					data: body,//{//access_token: 'XXXXXXXXXXXXXXXXXXX'},
+					headers: {
+						"Accept":'application/json; charset=UTF-8',
+						"Content-Type": 'application/json',
+						"Authorization": 'Basic ' + authToken
+					},
+					dataType: 'json',
+					success: successCallback(),
+					error: failCallback()
+				});
+				
+		}
+//AJAX CALLS
+		function Neo4j_InitAllNodes()
+		{
+		
+			var URL = "http://localhost:7474/db/data/transaction HTTP/1.1";
+			var body = '{"statements" : [ { "statement" : "MATCH (n) RETURN id(n),labels(n)"} ]}';
+	
+			$.ajax({
+					url: 'http://localhost:7474/db/data/transaction/commit',
+					type: 'post',
+					data: body,//{//access_token: 'XXXXXXXXXXXXXXXXXXX'},
+					headers: {
+						"Accept":'application/json; charset=UTF-8',
+						"Content-Type": 'application/json',
+						"Authorization": 'Basic ' + neo4jUserToken
+					},
+					dataType: 'json',
+					success: function (returnbody) {
+						for (var i = 0; i < returnbody.results.length; i++){
+							var result = returnbody.results[i];
+							for (var d = 0; d < result.data.length; d++){
+								var row = result.data[d].row;
+								var dat = new datax;
+								dat.id =row[0];
+								if (row[1]){dat.labels = row[1];}
+								addDataNode(row[0], dat);
+							}
+						}
+					}
+				});
+				
+				Neo4j_InitAllRelations();
+		}
+		
+		function Neo4j_InitAllRelations()
+		{
+		
+			var URL = "http://localhost:7474/db/data/transaction HTTP/1.1";
+			var body = '{"statements" : [ { "statement" : "MATCH (n)-[*1]->(m) RETURN id(n), id(m)"} ]}';
+	
+			$.ajax({
+					url: 'http://localhost:7474/db/data/transaction/commit',
+					type: 'post',
+					data: body,//{//access_token: 'XXXXXXXXXXXXXXXXXXX'},
+					headers: {
+						"Accept":'application/json; charset=UTF-8',
+						"Content-Type": 'application/json',
+						"Authorization": 'Basic ' + neo4jUserToken
+					},
+					dataType: 'json',
+					success: function (returnbody) {
+						//console.info(returnbody);
+						for (var i = 0; i < returnbody.results.length; i++){
+							
+							var result = returnbody.results[i];
+							for (var d = 0; d < result.data.length; d++){
+								var row = result.data[d].row;
+								addDataLink(row[0], row[1]);
+								//var link = GRAPH.addLink(row[0], row[1], { connectionStrength: 0.1 });
+								//var linkUI = graphics.getLinkUI(link.id);
+								//linkUI.attr('fromNode',row[0]).attr('toNode',row[1]);
+								//increaseNodeSize(row[0]);
+							}
+						}
+						
+					}
+				});
+		}
+		
+		function Neo4j_CreateNode(labelName)
+		{
+			var URL = "http://localhost:7474/db/data/transaction HTTP/1.1";
+			var body = '{"statements" : [ { "statement" : "CREATE (n:' + labelName + ') RETURN id(n)"} ]}';
+	
+			$.ajax({
+					url: 'http://localhost:7474/db/data/transaction/commit',
+					type: 'post',
+					data: body,
+					headers: {
+						"Accept":'application/json; charset=UTF-8',
+						"Content-Type": 'application/json',
+						"Authorization": 'Basic ' + neo4jUserToken
+					},
+					dataType: 'json',
+					success: function (returnbody) {	
+						//console.info(returnbody);
+						for (var i = 0; i < returnbody.results.length; i++){
+							
+							var result = returnbody.results[i];
+							for (var d = 0; d < result.data.length; d++){
+								//console.info(returnbody.results[i].data[d].row[0]);
+								var row = result.data[d].row;
+								var dat = new datax;
+								dat.id = row[0];
+								if (labelName) {dat.labels.push(labelName);}
+								addDataNode(row[0],dat);
+							}
+						}					
+					}
+				});
+		}
+
+		function Neo4j_DeleteNode(NodeID)
+		{
+			var URL = "http://localhost:7474/db/data/transaction HTTP/1.1";
+			var body = '{"statements" : [ { "statement" : "MATCH (n) where ID(n) = '+ NodeID +' DETACH DELETE (n) RETURN ID(n)"} ]}';
+	
+			$.ajax({
+					url: 'http://localhost:7474/db/data/transaction/commit',
+					type: 'post',
+					data: body,
+					headers: {
+						"Accept":'application/json; charset=UTF-8',
+						"Content-Type": 'application/json',
+						"Authorization": 'Basic ' + neo4jUserToken
+					},
+					dataType: 'json',
+					success: function (returnbody) {	
+						//console.info(returnbody);
+						for (var i = 0; i < returnbody.results.length; i++){
+							
+							var result = returnbody.results[i];
+							for (var d = 0; d < result.data.length; d++){
+								//console.info(returnbody.results[i].data[d].row[0]);
+								var row = result.data[d].row;
+								if (row[0]){
+									GRAPH.removeNode(row[0]);
+									selectedNodeID = '';
+									selectedNodeData = '';
+									selectedNode = '';
+								}
+							}
+						}					
+					}
+				});
+		}
+		
+		function Neo4j_CreateRelation(NodeID1, NodeID2, Relation)
+		{
+		
+			var URL = "http://localhost:7474/db/data/transaction HTTP/1.1";
+			var body = '{"statements" : [ { "statement" : "';
+			body += ' match (n) where ID(n) = ' + NodeID1;
+			body += ' match (m) where ID(m) = ' + NodeID2;
+			body += ' create (n)-[r:TEST]->(m)';
+			body += ' RETURN id(r)"}]}';
+			
+
+			
+			$.ajax({
+					url: 'http://localhost:7474/db/data/transaction/commit',
+					type: 'post',
+					data: body,
+					headers: {
+						"Accept":'application/json; charset=UTF-8',
+						"Content-Type": 'application/json',
+						"Authorization": 'Basic ' + neo4jUserToken
+					},
+					dataType: 'json',
+					success: function (returnbody) {	
+						console.info(returnbody);
+						for (var i = 0; i < returnbody.results.length; i++){
+							
+							var result = returnbody.results[i];
+							for (var d = 0; d < result.data.length; d++){
+								//console.info(returnbody.results[i].data[d].row[0]);
+								var row = result.data[d].row;
+								if (row[0]){
+
+									var link = GRAPH.addLink(NodeID1, NodeID2);
+									var linkUI = graphics.getLinkUI(link.id);
+									linkUI.attr('fromNode',NodeID1).attr('toNode',NodeID2);
+									increaseNodeSize(NodeID1);
+								}
+									
+								//var dat = new datax;
+								//	dat.id = row[0];
+								//	if (labelName) {dat.labels = labelName;}
+								//GRAPH.addNode(row[0],dat);
+							}
+						}					
+					},
+					error: function (msg) {
+					}
+					
+				});
+		}
+		
+
+		
+		
+//UI MANIPULATION
+		
+		function connectUser(){
+			
+			var userName, userPassword;
+			if (document.getElementById('usrname'))
+				userName = document.getElementById('usrname').value;
+			if (document.getElementById('psswrd'))
+				userPassword = document.getElementById('psswrd').value;
+			if (!userName) userName=defaultNeo4jUsername;
+			if (!userPassword) userPassword=defaultNeo4jPassword;
+			//Call Base64 function to get token...
+			neo4jUserToken =  window.btoa(userName + ':' + userPassword);
+		}
+		
+		function hideNeo4jConnect(){
+			document.getElementById("connectDets").remove();
+		}
+		
+		function addNewNode(){
+			var newNodeValue = document.getElementById('newNodeData').value;
+			Neo4j_CreateNode(newNodeValue);
+		}
+		
+		function deleteNode(){
+			Neo4j_DeleteNode(selectedNodeID);
+		}
+		
+		function update(){
+			var node = GRAPH.getNode(selectedNodeID);
+			var processingElement = document.getElementById('log');
+			node.data.labels = processingElement.value;
+			GRAPH.addNode(selectedNodeID,node.data);
+		}
+		
+		function relateSelectedToNode(){
+			bRelate = true;
+		}
+		
+
+		
+		function addVisLabel(label, labelIndex){
+			var LabelsDiv = document.getElementById('availableLabels');
+			//LabelsDiv.value = label.name
+			LabelsDiv.innerHTML = LabelsDiv.innerHTML + '<div onclick="highlightLabel('+labelIndex+')" id="labelPanel" style="background-color:'+label.color+'">' + label.name + '</div>';
+			//LabelsDiv.innerHTML = LabelsDiv.innerHTML + '<span>' + labelList[i]+ '<span>';
+		}
+		
+		//function fetchInfo(id) {
+		//	var root = 'https://secure.gravatar.com/avatar/91bad8ceeec43ae303790f8fe238164b';
+		//	return $.getJSON(root);
+			//var root = 'https://secure.gravatar.com/avatar/' + node.data';
+			//return $.getJSON(root + '/photos/' + id);
+		//}
+
+//==========Outside graph ==================================================================================================================================================================		
+		function main () {
+            // As in previous steps, we create a basic structure of a graph:
+			var processingElement = document.getElementById('selectedNode');
+			updateOutput();
+			function updateOutput(callback) {
+			  //processingElement.attributes[1].value=selectedNodeData;
+				processingElement.innerHTML='Selected node ID: ' + selectedNodeID + '<br/>Labels: ' + selectedNodeData.labels;			  
+				setTimeout(function () {
+					updateOutput(callback);
+				}, 0); // keep going in next even cycle
+			}
+		
+
+//==========Inside graph ==================================================================================================================================================================
+			var graph = Viva.Graph.graph();
+			
+            //graph.addNode('anvaka', 'test1'); //'91bad8ceeec43ae303790f8fe238164b');
+            //graph.addNode('indexzero',function(){var d = new Date(); return d.getTime() }()); // 'd43e8ea63b61e7669ded5b9d3c2e980f');
+			//graph.addNode('asdasd', 'test3'); //'d43e8ea63b61e7669ded5b9d3c2e980f');
+            //graph.addLink('anvaka', 'indexzero'); //'indexzero');
+			
+			// Custom physics... (include/exclude in the 'renderer' at the bottom of the script)
+			var idealLength = 150;
+			layout = Viva.Graph.Layout.forceDirected(graph, {
+			   springLength: idealLength,
+			   springCoeff : 0.00008,
+			   //dragCoeff : 0.01,
+			   //gravity : -1.2,
+			   //theta : 1
+			   springTransform: function (link, spring) {
+                    spring.length = idealLength;// + link.data.connectionStrength;
+               }
+				  
+			});
+		
+			// Custom functions...
+            graphics = Viva.Graph.View.svgGraphics(),
+                nodeSize = 24,
+				//------------------------------------------------------------------------------------
+                // we use this method to highlight all realted links
+                // when user hovers mouse over a node:
+                highlightRelatedNodes = function(nodeId, isOn) {				   
+				   // just enumerate all realted nodes and update link color:
+                   graph.forEachLinkedNode(nodeId, function(node, link){
+                       var linkUI = graphics.getLinkUI(link.id);
+                       if (linkUI) {
+                           // linkUI is a UI object created by graphics below
+                           linkUI.attr('stroke', isOn ? '#FAF566' : 'gray')
+							.attr('stroke-width', isOn ? '2' : '1');
+                       }
+                   });
+                },
+				//------------------------------------------------------------------------------------
+				highlightSelectedNode = function(nodeId) {
+				//increaseNodeSize(nodeId);
+				//updateBodyMass(nodeId)
+				
+				   var nodeUI;
+				   if (selectedNodeID != ''){
+						nodeUI = graphics.getNodeUI(selectedNodeID);
+						nodeUI.children[1].attr('stroke','transparent');
+				   }
+				   if (bRelate==true)
+				   {
+						if (nodeId != selectedNodeID){
+							//graph.addLink(selectedNodeID, nodeId);
+
+							Neo4j_CreateRelation(selectedNodeID, nodeId, 'TEST');
+						}
+						bRelate=false;
+				   }
+				   
+				   
+				   nodeUI = graphics.getNodeUI(nodeId);
+				   nodeUI.children[1].attr('stroke','red');
+				   var node = graph.getNode(nodeId);
+				   selectedNodeID = nodeId;
+				   selectedNodeData = node.data;
+				   selectedNode = node;
+				   selectedNodeUI = nodeUI;
+				   //node.addMass = -10;
+				   
+				   //fetchInfo(nodeId);
+				   
+                };
+				//------------------------------------------------------------------------------------
+
+            
+			//Node elements...
+			graphics.node(function(node) {				
+				ui = Viva.Graph.svg('g');
+				if (!node.data) node.data = new datax;
+				if (node.data.labels.indexOf("COLLECTION") > -1)
+				{
+					node.data.nodeOpacity = '0.1';
+					node.data.textColor = 'transparent';
+					//node.data.nodeSize = 10;
+				}
+				//Image elements...
+				//img = Viva.Graph.svg('image')
+                //     .attr('width', nodeSize)
+                //     .attr('height', nodeSize)
+                //     .link('https://secure.gravatar.com/avatar/' + node.data),
+					
+				//rectangle elements NODE-CIRCLE
+				
+				rectx = Viva.Graph.svg('rect')
+					.attr('x', -node.data.nodeSize/2)
+					.attr('y', -node.data.nodeSize/2)
+					.attr('rx', node.data.nodeSize/4)
+					.attr('width', node.data.nodeSize*2)
+					.attr('height', node.data.nodeSize*2)
+					.attr('fill',node.data.nodeColor)//'#4dffc3')
+					.attr('stroke-width','10')
+					.attr('stroke-opacity','0.5')
+					.attr('stroke-color','transparent')
+					.attr('fill-opacity',node.data.nodeOpacity),
+
+				uiSelected = Viva.Graph.svg('rect')
+					.attr('x', -node.data.nodeSize/2 -5)
+					.attr('y', -node.data.nodeSize/2 - 5)
+					.attr('rx', node.data.nodeSize/4)
+					.attr('width', node.data.nodeSize*2 + 10)
+					.attr('height', node.data.nodeSize*2 + 10)
+					.attr('fill','transparent')//'#4dffc3')
+					.attr('stroke-color','transparent')
+					.attr('stroke-opacity','0.5')
+					.attr('stroke-width','5')
+					.attr('fill-opacity',0.2),
+				
+				
+				//Circle elements NODE-CIRCLE
+				circlex = Viva.Graph.svg('circle')
+					.attr('cx', node.data.nodeSize/2)
+					.attr('cy', node.data.nodeSize/2)
+					.attr('r', node.data.nodeSize)
+					.attr('fill',node.data.nodeColor)//'#4dffc3')
+					.attr('stroke-width','5')
+					.attr('stroke-opacity','0.6')
+					.attr('fill-opacity',node.data.nodeOpacity),
+								
+				//Text elements... NODE-ID
+				svgText_Data = Viva.Graph.svg('text')
+					.attr('y', node.data.nodeSize/2 + 3)
+					.attr('x', 0 - node.data.displayLabel.length)
+					.attr('fill',node.data.textColor)
+					.attr('stroke-width','0')
+					.attr('font-family','Calibri')
+					.attr('font-size',labelSize*(node.data.displayLabel.length*-1))
+					//.attr('font-size',node.data.nodeSize)
+					.attr('text-decoration', 'underline')
+					.text(node.data.displayLabel),
+					
+				
+				//Text elements... NODE-DATA
+				//svgText = Viva.Graph.svg('text')
+				//	.attr('y', (node.data.nodeSize/2) + 10)
+				//	.attr('x', (node.data.nodeSize/2) - 10)
+				//	.attr('fill',node.data.textColor)
+				//	.attr('stroke-width','0')
+				//	.attr('font-size',(node.data.nodeSize/2))
+				//	.text(node.data.labels),
+				
+				//Circle elements
+				//circley = Viva.Graph.svg('circle')
+				//	.attr('cx', 25)
+				//	.attr('cy', 25)
+				//	.attr('r', 5)
+				//	.attr('fill','blue')
+				//	.attr('stroke-width','0')
+				//	.attr('stroke-opacity','0.5')
+				//	.attr('fill-opacity','0.3'),
+					
+					
+								
+            // Since we are using SVG we can easily subscribe to any supported
+            // events (http://www.w3.org/TR/SVG/interact.html#SVGEvents ),
+            // including mouse events:
+				///Node events...
+                $(ui).click(function() { // mouse down
+                    highlightSelectedNode(node.id);
+					layout.pinNode(node, true);
+					node.data.isPinned = true;
+                }),
+				
+				$(ui).mousedown(function() { // mouse down
+                    //highlightSelectedNode(node.id);
+                }),
+				
+
+	
+				$(ui).mouseup(function() { // mouse down
+                    //highlightSelectedNode(node.id);
+                }),
+				
+				$(ui).toggle(function() { // mouse down
+                    //highlightSelectedNode(node.id);
+                }),
+				
+				$(ui).hover(function() { // mouse over
+                    highlightRelatedNodes(node.id, true);
+                }, function() { // mouse out
+                    highlightRelatedNodes(node.id, false);
+                });
+  
+				//ui.append(circlex);
+				
+				//ui.append(img);
+				//ui.append(svgText);
+				ui.append(rectx);
+				ui.append(uiSelected);
+				ui.append(svgText_Data);
+				
+				ui.attr('nodeSize',node.data.nodeSize);
+				
+                return ui;
+				
+				
+				
+            }).placeNode(function(nodeUI, pos) {
+                //nodeUI.attr('x', pos.x - nodeSize / 2).attr('y', pos.y - nodeSize / 2);
+				var nodesize = nodeUI.attr('nodeSize');
+				nodeUI.attr('transform','translate(' +(pos.x - nodesize/2) + ',' + (pos.y - nodesize/2) + ')');
+				
+				//console.log(nodeUI.getBBox());
+            });
+
+			//====== LINK DRAWING ========================================================================================================
+			// To render an arrow we have to address two problems:
+            //  1. Links should start/stop at node's bounding box, not at the node center.
+            //  2. Render an arrow shape at the end of the link.
+
+            // Rendering arrow shape is achieved by using SVG markers, part of the SVG
+            // standard: http://www.w3.org/TR/SVG/painting.html#Markers
+            var createMarker = function(id) {
+                    return Viva.Graph.svg('marker')
+                               .attr('id', id)
+                               .attr('viewBox', "0 0 10 10")
+                               .attr('refX', "10")
+                               .attr('refY', "5")
+                               .attr('markerUnits', "strokeWidth")
+                               .attr('markerWidth', "10")
+                               .attr('markerHeight', "10")
+                               .attr('orient', "auto")
+							   .attr('stroke-width', '3');
+                },
+			
+            marker = createMarker('Triangle');
+            marker.append('path')
+			.attr('d', 'M 0 0 L 10 5 L 0 10 z')
+			.attr('fill','gray');
+
+            // Marker should be defined only once in <defs> child element of root <svg> element:
+            var defs = graphics.getSvgRoot().append('defs');
+            defs.append(marker);
+
+            var geom = Viva.Graph.geom();
+
+            graphics.link(function(link){
+                // Notice the Triangle marker-end attribe:
+                return Viva.Graph.svg('path')
+                           .attr('stroke', 'gray')
+                           //.attr('stroke-width', '0.1')
+						   .attr('marker-end', 'url(#Triangle)');
+						   
+            }).placeLink(function(linkUI, fromPos, toPos) {
+                // Here we should take care about
+                //  "Links should start/stop at node's bounding box, not at the node center."
+
+                // For rectangular nodes Viva.Graph.geom() provides efficient way to find
+                // an intersection point between segment and rectangle
+                var fromNodeID = linkUI.attr('fromNode');
+				var toNodeID = linkUI.attr('toNode');
+				var fromNode =GRAPH.getNode(fromNodeID);
+				var toNode =GRAPH.getNode(toNodeID);
+				toNodeSize = toNode.data.nodeSize;
+				fromNodeSize = fromNode.data.nodeSize;
+				
+				var toNodeSize = nodeSize * 2,
+                    fromNodeSize = nodeSize * 2;
+				
+				toNodeSize = toNode.data.nodeSize * 2;
+				fromNodeSize = fromNode.data.nodeSize * 2;
+				
+                var from = geom.intersectRect(
+                        // rectangle:
+                                fromPos.x - fromNodeSize / 2, // left
+                                fromPos.y - fromNodeSize / 2, // top
+                                fromPos.x + fromNodeSize / 2, // right
+                                fromPos.y + fromNodeSize / 2, // bottom
+                        // segment:
+                                fromPos.x, fromPos.y, toPos.x, toPos.y)
+                           || fromPos; // if no intersection found - return center of the node
+
+                var to = geom.intersectRect(
+                        // rectangle:
+                                toPos.x - toNodeSize / 2, // left
+                                toPos.y - toNodeSize / 2, // top
+                                toPos.x + toNodeSize / 2, // right
+                                toPos.y + toNodeSize / 2, // bottom
+                        // segment:
+                                toPos.x, toPos.y, fromPos.x, fromPos.y)
+                            || toPos; // if no intersection found - return center of the node
+
+                var data = 'M' + from.x + ',' + from.y +
+                           'L' + to.x + ',' + to.y;
+
+                linkUI.attr("d", data);
+            });
+			//==============================================================================================================
+
+            //graphics.link(function(link){
+            //    return Viva.Graph.svg('path')
+            //                  .attr('stroke', 'black');
+			//				  //.attr('stroke-width', '2');
+            //}).placeLink(function(linkUI, fromPos, toPos) {
+            //    var data = 'M' + fromPos.x + ',' + fromPos.y +
+            //               'L' + toPos.x + ',' + toPos.y;
+            //    linkUI.attr("d", data);
+            //})
+
+            // Finally render the graph with our customized graphics object:
+            renderer = Viva.Graph.View.renderer(graph, {
+              layout   : layout, //Exclude custom physics
+              graphics   : graphics,
+              renderLinks : true,
+              prerender  : true,
+			  container : document.getElementById('graphContainer')
+            });
+			
+			//var renderer2 = Viva.Graph.View.renderer(graph, {
+			//  container : document.getElementById('schemaContainer')
+            //});
+			
+			GRAPH = graph;
+				
+            renderer.run();
+			//renderer2.run();
+//=====================================================================================================================================================================================
+			connectUser();
+			Neo4j_InitAllNodes();
+			
+//=====================================================================================================================================================================================
+        }
+    </script>
+
+    <style type="text/css" media="screen">
+        html, body { width: 100%; height: 100%; background-color: #3a3a3a;}
+	
+		body{
+			height: 100%;
+			width: 100%;
+			position: absolute;
+			overflow: hidden;
+			left: 0;
+			top: 0;
+		  }
+	
+		svg, #graphContainer, #schemaContainer { 
+			width: 100%; 
+			height: 100%; 
+			background-color: #1a1a1a;
+			margin: 0px;
+			float:left;
+		}
+		.label {
+			//position: absolute;
+			top: 10px;
+			//color: white;
+			font-size: 18px;
+			left: 10px;
+			font-family: Verdana;
+		}
+				
+		 //canvas {
+		//	height: 100%;
+		//	width: 100%;
+		//	position: absolute;
+		//	overflow: hidden;
+		//	left: 0;
+		//	top: 0;
+		 // }  
+		  
+		  #labelPanel {
+			width:90%;
+			margin-top:5px;
+			margin-left:5px;
+			padding:5px;
+			border-style:solid;
+			border-width:2px;
+			border-color:#0d0d0d;
+			color: #0d0d0d;
+			background-color: #4d4d4d;
+			border-radius:10px;
+		  }
+		  .clearfix {
+			overflow: auto;
+		  }
+		  
+		  #toolPanel {
+			float:left;
+			width:200px;
+			margin:5px;
+			margin-left:5px;
+			padding:5px;
+			border-style:solid;
+			border-width:2px;
+			border-color:#0d0d0d;
+			color: deepskyblue;
+			background-color: #4d4d4d;
+			border-radius:10px;
+		  }
+		  .clearfix {
+			overflow: auto;
+		  }
+		  #graphPanel {
+			float:left;
+			width:70%;
+			height:80%;
+			margin-top:5px;
+			margin-left:10px;
+			padding:5px;
+			border-style:solid;
+			border-width:2px;
+			border-color:#0d0d0d;
+			color: deepskyblue;
+			background-color: #1a1a1a;
+			border-radius:10px;
+		  }
+		  .clearfix {
+			overflow: auto;
+		  }
+}
+
+		  
+    </style>
+</head>
+
+<body onload='main()'>
+
+	<!--canvas id="myCanvas" width="200" height="100" style="border:5px solid #000000;" fill="#3a3a3a">
+	</canvas-->
+
+	
+	<div id='toolPanel'>
+		<span id="availableLabels" class="label"></span>
+	</div>
+	
+	<div id='graphPanel'>
+		<div id='graphContainer'></div>
+	</div>
+	
+	<!--div id='graphPanel'>
+		<div id='schemaContainer'></div>
+	</div-->
+
+	<div id='toolPanel'>
+		<div id='selectedNode'></div>
+	</div>
+	
+	</div>
+		<div id='toolPanel'>
+		<div>
+			<button onclick='Neo4j_InitAllNodes()'>Refresh All</button>
+			<button onclick='increaseNodeSize()'>+</button>
+			<button onclick='decreaseNodeSize()'>-</button>
+			<button onclick='unPinNode()'>^</button>
+		</div>
+	</div>
+
+
+	
+	<div id='toolPanel'>
+		<div>
+			<button onclick='relateSelectedToNode()'>Relate entity</button>
+			<button onclick='deleteNode()'>Delete entity</button>
+		</div>
+	</div>
+	
+	<div id='toolPanel'>
+		<div id='connectDets'>		
+			Neo4j Username & Password:<br/> 
+			<input id='password' value='neo4j'></input>
+			<input id='psswrd' type="password"  value='password1234$'></input>
+			<button onclick='Neo4j_Connect()'>Connect</button>
+		</div>
+	</div>
+	
+	<div id='toolPanel'>		
+		Update selected entity:<br/> 
+		<input id='log' value=''></input>
+		<button onclick='update()'>Update entity</button>
+	</div>
+
+	<div id='toolPanel'>
+		<div id='newNode'>
+		  Label: <input id="newNodeData" type="text" name="lname"><br>
+		  <button onclick='addNewNode()'>Add new entity</button>
+		</div>
+	</div>
+
+
+</body>
+
+</html>
