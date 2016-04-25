@@ -12,11 +12,17 @@
     <script type="text/javascript">
 
 //==========Globals ==================================================================================================================================================================			
+		const UI_SHADOW_INDEX = 0;
+		const UI_MAIN_INDEX = 1;
+		const UI_SELECTOR_INDEX = 2;
+		const UI_TEXT_INDEX = 3;
+		
 		var labelsList = [];
 		var nodeList = [];
 		var checkedNodes = [];
 		var displayLabels = [];
-
+		var currentTheme = new theme();
+		var themes = [];
 		var neo4jUserToken = '';
 		var selectedNodeID = '';
 		var selectedNodeData = '';
@@ -47,6 +53,8 @@
 		var MaxLabelLength = 5; //the amount of characters allowed before elipse
 		var labelSize = 30;
 		
+		themes.push(new theme({min:70,max:150},'#cccccc', '#0d0d0d', 'rect'));
+		currentTheme = themes[0];
 		
 //MODELS	
 		function datax() {
@@ -65,6 +73,15 @@
 			this.color = setColor;
 			return this;
 		}
+		
+		function theme(entityRgbRange, graphBackground, entityLabelColor, entityShape)
+		{
+			this.entityRgbRange = (entityRgbRange)?entityRgbRange: {min:100,max:200};
+			this.graphBackground = (graphBackground)?graphBackground: '#1a1a1a';
+			this.entityLabelColor = (entityLabelColor)?entityLabelColor: 'white';
+			this.entityShape = (entityShape)?entityShape: 'rect';
+		}
+		
 		function getNeoLabel(byName)
 		{
 			var x;
@@ -89,10 +106,12 @@
 		{
 			nodeData.labels.forEach(function(label, index){
 				if(!getNeoLabel(label)) {
-					var randomColor = rgb2hex(getRandomArbitrary(100,200),getRandomArbitrary(100,200),getRandomArbitrary(100,200));
+					var randomColor = rgb2hex(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max),
+											  getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max),
+											  getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max));
 					var newLabel = new neoLabel(label, randomColor);
 					labelsList.push(newLabel);
-					addVisLabel(newLabel, labelsList.length-1);
+					//addVisLabel(newLabel, labelsList.length-1);
 				}
 				
 				//Don't show hidden labels...
@@ -155,23 +174,51 @@
 			var label = labelsList[labelIndex];
 			checkedNodes.forEach(function(node){
 				var nodeUI = graphics.getNodeUI(node.id);
-				nodeUI.children[0].attr('stroke','transparent');
+				nodeUI.children[UI_MAIN_INDEX].attr('stroke','transparent');
 			});
 			checkedNodes = [];
 			nodeList.forEach(function(node){
+				var nodeUI = graphics.getNodeUI(node.id);
 				if (node.data.labels.indexOf(label.name) > -1){
-					console.log(labelIndex);
-					var nodeUI = graphics.getNodeUI(node.id);
-					nodeUI.children[0].attr('stroke','#3399ff');
+					nodeUI.children[UI_MAIN_INDEX].attr('fill-opacity','0.8');
+					nodeUI.children[UI_SHADOW_INDEX].attr('fill-opacity','0.3');
+					nodeUI.children[UI_TEXT_INDEX].attr('fill-opacity','1');
 					checkedNodes.push(node);
 				}
-				
+				else{
+					nodeUI.children[UI_MAIN_INDEX].attr('fill-opacity','0.2');
+					nodeUI.children[UI_SHADOW_INDEX].attr('fill-opacity','0');
+					nodeUI.children[UI_TEXT_INDEX].attr('fill-opacity','0.3');
+				}
+					
 			});
 		}
 		
+		function createLabelDiplay()
+		{
+			//console.log(labelsList);
+			labelsList.sort(sort_by('name', false, function(a){return a.toUpperCase()}));
+			var LabelsDiv = document.getElementById('availableLabels');
+			LabelsDiv.innerHTML = '';
+			labelsList.forEach(function(label,index){
+				LabelsDiv.innerHTML = LabelsDiv.innerHTML + 
+					'<div onclick="highlightLabel('+index+')" id="labelPanel" style="background-color:'+label.color+'">' + label.name + 
+					'</div>';
+			});
+		}
 //USEFULL FUNCTIONS
 		//convert string to Base64
 		//var encodedData = window.btoa(stringToEncode);
+
+		var sort_by = function(field, reverse, primer){
+		   var key = primer ? 
+			   function(x) {return primer(x[field])} : 
+			   function(x) {return x[field]};
+		   reverse = !reverse ? 1 : -1;
+		   return function (a, b) {
+			   return a = key(a), b = key(b), reverse * ((a > b) - (b > a));
+			 } 
+		}
 
 		// Returns a random number between min (inclusive) and max (exclusive)
 		function getRandomArbitrary(min, max) {
@@ -235,8 +282,10 @@
 								dat.id =row[0];
 								if (row[1]){dat.labels = row[1];}
 								addDataNode(row[0], dat);
+								
 							}
 						}
+						createLabelDiplay();
 					}
 				});
 				
@@ -441,12 +490,7 @@
 		
 
 		
-		function addVisLabel(label, labelIndex){
-			var LabelsDiv = document.getElementById('availableLabels');
-			//LabelsDiv.value = label.name
-			LabelsDiv.innerHTML = LabelsDiv.innerHTML + '<div onclick="highlightLabel('+labelIndex+')" id="labelPanel" style="background-color:'+label.color+'">' + label.name + '</div>';
-			//LabelsDiv.innerHTML = LabelsDiv.innerHTML + '<span>' + labelList[i]+ '<span>';
-		}
+
 		
 		//function fetchInfo(id) {
 		//	var root = 'https://secure.gravatar.com/avatar/91bad8ceeec43ae303790f8fe238164b';
@@ -516,7 +560,7 @@
 				   var nodeUI;
 				   if (selectedNodeID != ''){
 						nodeUI = graphics.getNodeUI(selectedNodeID);
-						nodeUI.children[1].attr('stroke','transparent');
+						nodeUI.children[UI_SELECTOR_INDEX].attr('stroke','transparent');
 				   }
 				   if (bRelate==true)
 				   {
@@ -530,7 +574,7 @@
 				   
 				   
 				   nodeUI = graphics.getNodeUI(nodeId);
-				   nodeUI.children[1].attr('stroke','red');
+				   nodeUI.children[UI_SELECTOR_INDEX].attr('stroke','red');
 				   var node = graph.getNode(nodeId);
 				   selectedNodeID = nodeId;
 				   selectedNodeData = node.data;
@@ -562,17 +606,29 @@
 					
 				//rectangle elements NODE-CIRCLE
 				
+				shadow = Viva.Graph.svg('rect')
+					.attr('x', -node.data.nodeSize/2 + 5)
+					.attr('y', -node.data.nodeSize/2 + 5)
+					.attr('rx', node.data.nodeSize/4)
+					.attr('width', node.data.nodeSize*2)
+					.attr('height', node.data.nodeSize*2)
+					.attr('fill','#000000')//'#4dffc3')
+					.attr('stroke-width','0')
+					.attr('fill-opacity','0.3'),
+					
 				rectx = Viva.Graph.svg('rect')
 					.attr('x', -node.data.nodeSize/2)
 					.attr('y', -node.data.nodeSize/2)
 					.attr('rx', node.data.nodeSize/4)
+					.attr('r', node.data.nodeSize)
 					.attr('width', node.data.nodeSize*2)
 					.attr('height', node.data.nodeSize*2)
 					.attr('fill',node.data.nodeColor)//'#4dffc3')
 					.attr('stroke-width','10')
 					.attr('stroke-opacity','0.5')
 					.attr('stroke-color','transparent')
-					.attr('fill-opacity',node.data.nodeOpacity),
+					//.attr('fill-opacity',node.data.nodeOpacity),
+					.attr('fill-opacity','1'),
 
 				uiSelected = Viva.Graph.svg('rect')
 					.attr('x', -node.data.nodeSize/2 -5)
@@ -601,12 +657,13 @@
 				svgText_Data = Viva.Graph.svg('text')
 					.attr('y', node.data.nodeSize/2 + 3)
 					.attr('x', 0 - node.data.displayLabel.length)
-					.attr('fill',node.data.textColor)
+					.attr('fill',currentTheme.entityLabelColor)
 					.attr('stroke-width','0')
 					.attr('font-family','Calibri')
 					.attr('font-size',labelSize*(node.data.displayLabel.length*-1))
 					//.attr('font-size',node.data.nodeSize)
 					.attr('text-decoration', 'underline')
+					.attr('font-weight', 'bold')
 					.text(node.data.displayLabel),
 					
 				
@@ -665,6 +722,7 @@
 				
 				//ui.append(img);
 				//ui.append(svgText);
+				ui.append(shadow);
 				ui.append(rectx);
 				ui.append(uiSelected);
 				ui.append(svgText_Data);
@@ -797,6 +855,8 @@
 //=====================================================================================================================================================================================
 			connectUser();
 			Neo4j_InitAllNodes();
+			document.getElementById('graphContainer').style.background=currentTheme.graphBackground;
+			
 			
 //=====================================================================================================================================================================================
         }
@@ -817,7 +877,7 @@
 		svg, #graphContainer, #schemaContainer { 
 			width: 100%; 
 			height: 100%; 
-			background-color: #1a1a1a;
+			//background-color: #3a3a3a;
 			margin: 0px;
 			float:left;
 		}
@@ -870,6 +930,7 @@
 			color: deepskyblue;
 			background-color:#1a1a1a;
 			border-radius:10px;
+			
 		  }
 		  .clearfix {
 			overflow: auto;
@@ -903,7 +964,7 @@
 	</canvas-->
 
 	
-	<div id='toolPanel'>
+	<div id='toolPanel' style='height:80%; overflow:auto;'>
 		<span id="availableLabels" class="label"></span>
 	</div>
 	
