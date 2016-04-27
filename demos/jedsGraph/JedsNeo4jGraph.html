@@ -12,15 +12,16 @@
     <script type="text/javascript">
 
 //==========Globals ==================================================================================================================================================================			
-		const UI_SHADOW_INDEX = 0;
-		const UI_MAIN_INDEX = 1;
-		const UI_SELECTOR_INDEX = 2;
-		const UI_TEXT_INDEX = 3;
+		//const UI_SHADOW_INDEX = 0;
+		var UI_MAIN_INDEX = 0;
+		var UI_SELECTOR_INDEX = 1;
+		var UI_TEXT_INDEX = 2;
 		
-		var labelsList = [];
-		var nodeList = [];
-		var checkedNodes = [];
-		var displayLabels = [];
+		var labelsList = []; //list of neoLabel objects
+		var startupLabels = ["SCHEMA_ROOT", "ROOT"]; //list of strings // 
+		var nodeList = []; //list of node objects
+		var checkedNodes = []; //list of node objects
+		//var displayLabels = [];
 		var currentTheme = new theme();
 		var themes = [];
 		var neo4jUserToken = '';
@@ -61,25 +62,52 @@
 		  this.id = 0;
 		  this.labels = [];
 		  this.nodeSize = 25;
-		  this.nodeColor = '#ffffff'
+		  this.nodeColor = '#ffffff';
+		  this.nodeColorRGB = {r:0,g:0,b:0};
 		  this.nodeOpacity = '0.5'
-		  this.textColor = '#ffffff'
+		  this.textColor = '#ffffff';
 		  this.displayLabel = '';
 		  this.isPinned = false; 
+		  this.properties = [];
+		  this.toLinks = [];
+		  this.fromLinks = [];
 		}
-		function neoLabel(setName, setColor)
+		
+		function neoPropertyList(obj)
+		{
+			var propArray = [];
+			for (var thiskey in obj) {
+				propArray.push({key: thiskey, value:obj[thiskey]})
+			}
+			return propArray;
+		}
+		
+		function neoLabel(setName, setColor, setColorRGB)
 		{
 			this.name = setName;
 			this.color = setColor;
+			this.colorRGB = setColorRGB;
 			return this;
 		}
 		
 		function theme(entityRgbRange, graphBackground, entityLabelColor, entityShape)
 		{
 			this.entityRgbRange = (entityRgbRange)?entityRgbRange: {min:100,max:200};
+			/*The 4bit rgb range from which label colors can be automatically generated.*/
 			this.graphBackground = (graphBackground)?graphBackground: '#1a1a1a';
 			this.entityLabelColor = (entityLabelColor)?entityLabelColor: 'white';
 			this.entityShape = (entityShape)?entityShape: 'rect';
+			/*choices: 
+				rect (entities are rectangular)
+				circle (entities are circles)
+			*/
+			this.labelSizing = "fontsize"; 
+			/*choices: 
+				"hyphenate" (make labels shorter)
+				"fontsize" (make the font size smaller)
+				"" (no sizing, labels may extend past the boundaries of the node)
+			*/
+			
 		}
 		
 		function getNeoLabel(byName)
@@ -106,10 +134,13 @@
 		{
 			nodeData.labels.forEach(function(label, index){
 				if(!getNeoLabel(label)) {
-					var randomColor = rgb2hex(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max),
-											  getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max),
-											  getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max));
-					var newLabel = new neoLabel(label, randomColor);
+					var rgb = {r: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max)),
+							   g: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max)),
+							   b: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max))
+					}
+					var randomColor = rgb2hex(rgb.r, rgb.g, rgb.b);
+					var newLabel = new neoLabel(label, randomColor, rgb);
+					
 					labelsList.push(newLabel);
 					//addVisLabel(newLabel, labelsList.length-1);
 				}
@@ -123,28 +154,32 @@
 			
 			//nodeData.displayLabel;
 			var aNeoLabel = getNeoLabel(nodeData.labels[0]);
-			if (aNeoLabel) {nodeData.nodeColor = aNeoLabel.color;}
-			var newNode = GRAPH.addNode(nodeId,nodeData);
+			if (aNeoLabel) {nodeData.nodeColor = aNeoLabel.color; nodeData.nodeColorRGB = aNeoLabel.colorRGB;}
+			var newNode = addNodeToGraph(nodeId,nodeData);
 			nodeList.push(newNode);
 			//var newNodeUI = graphics.getNodeUI(nodeId);
 			//var textWidth = newNodeUI.children[2];
-			//console.log(textWidth);
 			//newNodeUI.children[2].attr('x', -textWidth/2);
 			
 		}
 				
-		function addDataLink(fromNode, toNode)
+		function addDataLink(fromNodeID, toNodeID, relationshipData)
 		{
-			var link = GRAPH.addLink(fromNode, toNode, { connectionStrength: 110 });
+			//var linkData = {};relationshipData;
+			//linkData.connectionStrength = 110;
+			var link = GRAPH.addLink(fromNodeID, toNodeID, relationshipData);
 			
-			//var otherLinks = GRAPH.getLinks(fromNode);
+			//var otherLinks = GRAPH.getLinks(fromNodeID);
 			//otherLinks.forEach(function(otherlink) {
 			//	otherlink.data.connectionStrength+= 1;
 			//});
-			
+			var toNode = GRAPH.getNode(toNodeID);
+			var fromNode = GRAPH.getNode(toNodeID);
 			var linkUI = graphics.getLinkUI(link.id);
-			linkUI.attr('fromNode',fromNode).attr('toNode',toNode);
-			increaseNodeSize(fromNode);
+			linkUI.attr('fromNode',fromNodeID).attr('toNode',toNodeID);
+			toNode.data.toLinks.push(link);
+			fromNode.data.fromLinks.push(link);
+			increaseNodeSize(fromNodeID);
 		}
 			
 		function unPinNode()
@@ -153,20 +188,40 @@
 			selectedNode.data.isPinned = false;
 		}
 		
+		function unPinAllNodes()
+		{
+			nodeList.forEach(function(node){
+				layout.pinNode(node, false);
+				node.data.isPinned = false;
+			});
+		}
+		
+		function addNodeToGraph(nodeId, nodeData)
+		{
+			var newNode = GRAPH.addNode(nodeId, nodeData);
+			fixTextWidth(graphics.getNodeUI(nodeId));
+			return newNode;
+		}
+		
 		function increaseNodeSize(nodeId)
 		{
 			if (!nodeId){nodeId = selectedNodeID;}
 			var node = GRAPH.getNode(nodeId);
 			node.data.nodeSize = node.data.nodeSize * 1.1;
-			GRAPH.addNode(node.id,node.data);
+			addNodeToGraph(node.id,node.data);
+			node.data.toLinks.forEach(function(link){
+				
+				var linkUI = graphics.getLinkUI(link.id);
+				//linkUI.attr('stroke-width',node.data.nodeSize/5);
+			});			
 		}		
-		
+
 		function decreaseNodeSize(nodeId)
 		{
 			if (!nodeId){nodeId = selectedNodeID;}
 			var node = GRAPH.getNode(nodeId);
 			node.data.nodeSize = node.data.nodeSize / 1.1;
-			GRAPH.addNode(node.id,node.data);
+			addNodeToGraph(node.id,node.data);
 		}	
 		
 		function highlightLabel(labelIndex)
@@ -181,13 +236,11 @@
 				var nodeUI = graphics.getNodeUI(node.id);
 				if (node.data.labels.indexOf(label.name) > -1){
 					nodeUI.children[UI_MAIN_INDEX].attr('fill-opacity','0.8');
-					nodeUI.children[UI_SHADOW_INDEX].attr('fill-opacity','0.3');
 					nodeUI.children[UI_TEXT_INDEX].attr('fill-opacity','1');
 					checkedNodes.push(node);
 				}
 				else{
 					nodeUI.children[UI_MAIN_INDEX].attr('fill-opacity','0.2');
-					nodeUI.children[UI_SHADOW_INDEX].attr('fill-opacity','0');
 					nodeUI.children[UI_TEXT_INDEX].attr('fill-opacity','0.3');
 				}
 					
@@ -196,7 +249,6 @@
 		
 		function createLabelDiplay()
 		{
-			//console.log(labelsList);
 			labelsList.sort(sort_by('name', false, function(a){return a.toUpperCase()}));
 			var LabelsDiv = document.getElementById('availableLabels');
 			LabelsDiv.innerHTML = '';
@@ -257,16 +309,71 @@
 				
 		}
 //AJAX CALLS
-		function Neo4j_InitAllNodes()
+
+		function neo_APIcall()
 		{
+			this.statements = [];
+			return this;
+		}
+		function neo_Statement(statement)
+		{
+			this.statement = statement;
+			return this;
+		}
 		
+		function Neo4j_GetNodesFor(neo_nodeid)
+		{
 			var URL = "http://localhost:7474/db/data/transaction HTTP/1.1";
-			var body = '{"statements" : [ { "statement" : "MATCH (n) RETURN id(n),labels(n)"} ]}';
+			var body = '{"statements" : [ { "statement" : "MATCH (n)-[*1]->(m) where id(n) = '+ neo_nodeid +' RETURN id(n), id(m), labels(m), (m)"} ]}';
 	
 			$.ajax({
 					url: 'http://localhost:7474/db/data/transaction/commit',
 					type: 'post',
 					data: body,//{//access_token: 'XXXXXXXXXXXXXXXXXXX'},
+					headers: {
+						"Accept":'application/json; charset=UTF-8',
+						"Content-Type": 'application/json',
+						"Authorization": 'Basic ' + neo4jUserToken
+					},
+					dataType: 'json',
+					success: function (returnbody) {
+						//console.info(returnbody);
+						for (var i = 0; i < returnbody.results.length; i++){
+							
+							var result = returnbody.results[i];
+							for (var d = 0; d < result.data.length; d++){
+								var row = result.data[d].row;
+								
+								var dat = new datax;
+								dat.id =row[1];
+								if (row[2]){dat.labels = row[2];}
+								if (row[3]){dat.properties = new neoPropertyList(row[3]);}
+								addDataNode(row[0], dat);
+								
+								addDataLink(row[0], row[1]);
+								increaseNodeSize(row[0]);
+							}
+						}
+						
+					}
+				});
+		}
+		
+		function Neo4j_GetNodes(byLabel)
+		{
+		
+			var matchPattern = 'n';
+			if (byLabel) {matchPattern += ":" + matchPattern;}
+		//var bodyStart = '{"statements" : [ { "statement" : "MATCH (n) RETURN id(n),labels(n)"} ]}';
+			var URL = "http://localhost:7474/db/data/transaction HTTP/1.1";
+			var body = new neo_APIcall(); 
+			body.statements.push(new neo_Statement('MATCH ('+matchPattern+') RETURN id(n), labels(n), (n)'));
+
+	
+			$.ajax({
+					url: 'http://localhost:7474/db/data/transaction/commit',
+					type: 'post',
+					data: JSON.stringify(body),//{//access_token: 'XXXXXXXXXXXXXXXXXXX'},
 					headers: {
 						"Accept":'application/json; charset=UTF-8',
 						"Content-Type": 'application/json',
@@ -280,6 +387,7 @@
 								var row = result.data[d].row;
 								var dat = new datax;
 								dat.id =row[0];
+								if (row[2]){dat.properties = new neoPropertyList(row[2]);}
 								if (row[1]){dat.labels = row[1];}
 								addDataNode(row[0], dat);
 								
@@ -316,10 +424,7 @@
 							for (var d = 0; d < result.data.length; d++){
 								var row = result.data[d].row;
 								addDataLink(row[0], row[1]);
-								//var link = GRAPH.addLink(row[0], row[1], { connectionStrength: 0.1 });
-								//var linkUI = graphics.getLinkUI(link.id);
-								//linkUI.attr('fromNode',row[0]).attr('toNode',row[1]);
-								//increaseNodeSize(row[0]);
+								increaseNodeSize(row[0]);
 							}
 						}
 						
@@ -430,7 +535,7 @@
 									var link = GRAPH.addLink(NodeID1, NodeID2);
 									var linkUI = graphics.getLinkUI(link.id);
 									linkUI.attr('fromNode',NodeID1).attr('toNode',NodeID2);
-									increaseNodeSize(NodeID1);
+									//increaseNodeSize(NodeID1);
 								}
 									
 								//var dat = new datax;
@@ -468,7 +573,7 @@
 			document.getElementById("connectDets").remove();
 		}
 		
-		function addNewNode(){
+		function createNode(){
 			var newNodeValue = document.getElementById('newNodeData').value;
 			Neo4j_CreateNode(newNodeValue);
 		}
@@ -480,15 +585,110 @@
 		function update(){
 			var node = GRAPH.getNode(selectedNodeID);
 			var processingElement = document.getElementById('log');
-			node.data.labels = processingElement.value;
-			GRAPH.addNode(selectedNodeID,node.data);
+			node.data.labels.push(processingElement.value);
+			addNodeToGraph(selectedNodeID,node.data);
+			
 		}
 		
 		function relateSelectedToNode(){
 			bRelate = true;
 		}
 		
-
+		function fontGrow()
+		{
+			var fontsize = Number(selectedNodeUI.children[UI_TEXT_INDEX].attr('font-size'));
+			selectedNodeUI.children[UI_TEXT_INDEX].attr('font-size', fontsize + 1);
+		}
+		function fontShrink()
+		{
+			var fontsize = Number(selectedNodeUI.children[UI_TEXT_INDEX].attr('font-size'));
+			selectedNodeUI.children[UI_TEXT_INDEX].attr('font-size', fontsize - 1);
+		}
+		function fontDown()
+		{
+			var fontsize = Number(selectedNodeUI.children[UI_TEXT_INDEX].attr('y'));
+			selectedNodeUI.children[UI_TEXT_INDEX].attr('y', fontsize + 1);
+		}
+		function fontUp()
+		{
+			var fontsize = Number(selectedNodeUI.children[UI_TEXT_INDEX].attr('y'));
+			selectedNodeUI.children[UI_TEXT_INDEX].attr('y', fontsize - 1);
+		}
+		
+		function fixTextWidth(nodeUI)
+		{
+			var widthOfNode = Number(nodeUI.children[UI_MAIN_INDEX].getBBox().width);
+			var minWidth = widthOfNode - widthOfNode * 0.1;
+			var widthOfText = Number(nodeUI.children[UI_TEXT_INDEX].getBBox().width);
+			var text = nodeUI.children[UI_TEXT_INDEX].text();
+			if (!text || text.length == 0) {return;}
+			
+			var failer = 0;
+			
+			if (widthOfText > minWidth)
+			{
+				while (widthOfText >= minWidth)
+				{
+					failer++;
+					if (currentTheme.labelSizing == 'hyphenate')
+					{
+						text = (text).substring(0, text.length-2) + "'";
+						nodeUI.children[UI_TEXT_INDEX].text(text);
+					}
+					else if (currentTheme.labelSizing == 'fontsize')
+					{
+						var fontsize = Number(nodeUI.children[UI_TEXT_INDEX].attr('font-size'));
+						nodeUI.children[UI_TEXT_INDEX].attr('font-size', fontsize*0.9);
+					}
+					else return;
+					widthOfText = Number(nodeUI.children[UI_TEXT_INDEX].getBBox().width);
+					if (failer > 1000) return;
+				}
+			}
+			else if (currentTheme.labelSizing == 'fontsize')
+			{	failer = 0;			
+				while (widthOfText < minWidth - (widthOfText *0.2))
+				{
+					failer++;
+					var fontsize = Number(nodeUI.children[UI_TEXT_INDEX].attr('font-size'));
+					nodeUI.children[UI_TEXT_INDEX].attr('font-size', fontsize*1.1);
+					widthOfText = Number(nodeUI.children[UI_TEXT_INDEX].getBBox().width);
+					if (failer > 1000) return;
+				}
+			}
+			nodeUI.children[UI_TEXT_INDEX].attr('x', -minWidth/5);
+			var heightOfNode = Number(nodeUI.children[UI_MAIN_INDEX].getBBox().height);
+			nodeUI.children[UI_TEXT_INDEX].attr('y', heightOfNode/3);
+		}
+		
+		function showNodeDetails(node)
+		{
+		    //// As in previous steps, we create a basic structure of a graph:
+			//var processingElement = document.getElementById('selectedNode');
+			//updateOutput();
+			//function updateOutput(callback) {
+			//	processingElement.innerHTML='Selected node ID: ' + selectedNodeID + '<br/>Labels: ' + selectedNodeData.labels;			  
+			//	setTimeout(function () {
+			//		updateOutput(callback);
+			//	}, 0); // keep going in next even cycle
+			//}
+			var processingElement = document.getElementById('selectedNode');
+			var labellist = ''
+			node.data.labels.forEach(function(label, index){
+				if (index!=0){labellist += ', ';}
+				labellist += label;
+			});
+			var html = '<a style="text-decoration: underline; font-weight: bold;">Selected entity ID<a>: ' + selectedNodeID;
+			html += '<br/><a style="text-decoration: underline; font-weight: bold;">Entity type<a>:<br/>' + labellist;
+			processingElement.innerHTML = html;
+			
+			html = '<a style="text-decoration: underline; font-weight: bold;">Properties<a>:';
+			var processingElement = document.getElementById('nodeDetails');
+			node.data.properties.forEach(function(property, index){
+				html += '<br/>  ' + property.key + ': ' + property.value;
+			});
+			processingElement.innerHTML = html;
+		}
 		
 
 		
@@ -501,16 +701,7 @@
 
 //==========Outside graph ==================================================================================================================================================================		
 		function main () {
-            // As in previous steps, we create a basic structure of a graph:
-			var processingElement = document.getElementById('selectedNode');
-			updateOutput();
-			function updateOutput(callback) {
-			  //processingElement.attributes[1].value=selectedNodeData;
-				processingElement.innerHTML='Selected node ID: ' + selectedNodeID + '<br/>Labels: ' + selectedNodeData.labels;			  
-				setTimeout(function () {
-					updateOutput(callback);
-				}, 0); // keep going in next even cycle
-			}
+
 		
 
 //==========Inside graph ==================================================================================================================================================================
@@ -545,17 +736,18 @@
 				   // just enumerate all realted nodes and update link color:
                    graph.forEachLinkedNode(nodeId, function(node, link){
                        var linkUI = graphics.getLinkUI(link.id);
-                       if (linkUI) {
+                       //var strokeWidth = Number(linkUI.attr('stroke-width'));
+					   if (linkUI) {
                            // linkUI is a UI object created by graphics below
-                           linkUI.attr('stroke', isOn ? '#FAF566' : 'gray')
-							.attr('stroke-width', isOn ? '2' : '1');
+                           linkUI.attr('stroke', isOn ? '#cc3300' : 'gray')
+							.attr('stroke-width', isOn ? 4 : 3)
+							.attr('markerHeight', "20");
+							//.attr('fill', isOn ? '#cc3300' : 'gray');
                        }
                    });
                 },
 				//------------------------------------------------------------------------------------
 				highlightSelectedNode = function(nodeId) {
-				//increaseNodeSize(nodeId);
-				//updateBodyMass(nodeId)
 				
 				   var nodeUI;
 				   if (selectedNodeID != ''){
@@ -576,6 +768,7 @@
 				   nodeUI = graphics.getNodeUI(nodeId);
 				   nodeUI.children[UI_SELECTOR_INDEX].attr('stroke','red');
 				   var node = graph.getNode(nodeId);
+				   showNodeDetails(node);
 				   selectedNodeID = nodeId;
 				   selectedNodeData = node.data;
 				   selectedNode = node;
@@ -606,15 +799,16 @@
 					
 				//rectangle elements NODE-CIRCLE
 				
-				shadow = Viva.Graph.svg('rect')
-					.attr('x', -node.data.nodeSize/2 + 5)
-					.attr('y', -node.data.nodeSize/2 + 5)
-					.attr('rx', node.data.nodeSize/4)
-					.attr('width', node.data.nodeSize*2)
-					.attr('height', node.data.nodeSize*2)
-					.attr('fill','#000000')//'#4dffc3')
-					.attr('stroke-width','0')
-					.attr('fill-opacity','0.3'),
+				//shadow = Viva.Graph.svg('rect')
+				//	.attr('x', -node.data.nodeSize/2 + 5)
+				//	.attr('y', -node.data.nodeSize/2 + 5)
+				//	.attr('rx', node.data.nodeSize/4)
+				//	.attr('width', node.data.nodeSize*2)
+				//	.attr('height', node.data.nodeSize*2)
+				//	.attr('fill','#000000')//'#4dffc3')
+				//	.attr('stroke-width','0')
+				//	.attr('fill-opacity','0')
+					
 					
 				rectx = Viva.Graph.svg('rect')
 					.attr('x', -node.data.nodeSize/2)
@@ -623,44 +817,47 @@
 					.attr('r', node.data.nodeSize)
 					.attr('width', node.data.nodeSize*2)
 					.attr('height', node.data.nodeSize*2)
-					.attr('fill',node.data.nodeColor)//'#4dffc3')
+					.attr('fill','url(#gradGlow)')//node.data.nodeColor)//'#4dffc3')
 					.attr('stroke-width','10')
 					.attr('stroke-opacity','0.5')
 					.attr('stroke-color','transparent')
-					//.attr('fill-opacity',node.data.nodeOpacity),
-					.attr('fill-opacity','1'),
-
-				uiSelected = Viva.Graph.svg('rect')
-					.attr('x', -node.data.nodeSize/2 -5)
-					.attr('y', -node.data.nodeSize/2 - 5)
-					.attr('rx', node.data.nodeSize/4)
-					.attr('width', node.data.nodeSize*2 + 10)
-					.attr('height', node.data.nodeSize*2 + 10)
-					.attr('fill','transparent')//'#4dffc3')
-					.attr('stroke-color','transparent')
-					.attr('stroke-opacity','0.5')
-					.attr('stroke-width','5')
-					.attr('fill-opacity',0.2),
-				
-				
+					.attr('fill-opacity','0.3'),
+					//.attr('filter','url(#f3)')
+					
 				//Circle elements NODE-CIRCLE
 				circlex = Viva.Graph.svg('circle')
 					.attr('cx', node.data.nodeSize/2)
 					.attr('cy', node.data.nodeSize/2)
 					.attr('r', node.data.nodeSize)
-					.attr('fill',node.data.nodeColor)//'#4dffc3')
+					.attr('fill','url(#gradRound)')//node.data.nodeColor)//'#4dffc3')
 					.attr('stroke-width','5')
 					.attr('stroke-opacity','0.6')
+					.attr('filter','url(#f3)')
 					.attr('fill-opacity',node.data.nodeOpacity),
-								
+
+				uiSelected = Viva.Graph.svg('circle')
+					.attr('cx', node.data.nodeSize/2) //...for circle
+					.attr('cy', node.data.nodeSize/2)//...for circle
+					.attr('r', node.data.nodeSize+ node.data.nodeSize/3)//...for circle
+					//.attr('x', -node.data.nodeSize/2 - 5)//...for rect
+					//.attr('y', -node.data.nodeSize/2 - 5)//...for rect
+					//.attr('rx', node.data.nodeSize/4)//...for rect
+					//.attr('width', node.data.nodeSize*2 + 10)//...for rect
+					//.attr('height', node.data.nodeSize*2 + 10)//...for rect
+					.attr('fill','transparent')//'#4dffc3')
+					.attr('stroke-color','transparent')
+					.attr('stroke-opacity','0.5')
+					.attr('stroke-width',node.data.nodeSize/5)
+					.attr('fill-opacity',0.2),
+
 				//Text elements... NODE-ID
 				svgText_Data = Viva.Graph.svg('text')
-					.attr('y', node.data.nodeSize/2 + 3)
-					.attr('x', 0 - node.data.displayLabel.length)
+					.attr('y', 0) //node.data.nodeSize/2 + 5)
+					.attr('x', -10)// - node.data.displayLabel.length)
 					.attr('fill',currentTheme.entityLabelColor)
 					.attr('stroke-width','0')
 					.attr('font-family','Calibri')
-					.attr('font-size',labelSize*(node.data.displayLabel.length*-1))
+					.attr('font-size','20')
 					//.attr('font-size',node.data.nodeSize)
 					.attr('text-decoration', 'underline')
 					.attr('font-weight', 'bold')
@@ -692,28 +889,31 @@
             // events (http://www.w3.org/TR/SVG/interact.html#SVGEvents ),
             // including mouse events:
 				///Node events...
-                $(ui).click(function() { // mouse down
+                $(ui).click(function() { // MOUSE CLICK
                     highlightSelectedNode(node.id);
 					layout.pinNode(node, true);
+					//selectedNodeUI.children[UI_MAIN_INDEX].attr('filter',''); //it works, just doesn't contribute to the look & feel.
 					node.data.isPinned = true;
+					
                 }),
 				
-				$(ui).mousedown(function() { // mouse down
+				$(ui).mousedown(function() { // MOUSE DOWN
                     //highlightSelectedNode(node.id);
                 }),
 				
 
 	
-				$(ui).mouseup(function() { // mouse down
+				$(ui).mouseup(function() { // MOUSE UP
                     //highlightSelectedNode(node.id);
                 }),
 				
-				$(ui).toggle(function() { // mouse down
+				$(ui).toggle(function() { // TOGGLE
                     //highlightSelectedNode(node.id);
                 }),
 				
-				$(ui).hover(function() { // mouse over
+				$(ui).hover(function() { // MOUSE HOVER
                     highlightRelatedNodes(node.id, true);
+					
                 }, function() { // mouse out
                     highlightRelatedNodes(node.id, false);
                 });
@@ -722,10 +922,24 @@
 				
 				//ui.append(img);
 				//ui.append(svgText);
-				ui.append(shadow);
-				ui.append(rectx);
+				//ui.innerHTML = '<defs><filter id="f1" x="0" y="0"><feGaussianBlur in="SourceGraphic" stdDeviation="15" /></filter></defs>';
+
+				var visDefs = '<defs>';
+				visDefs += '<filter id="f3" x="0" y="0" width="200%" height="200%"><feOffset result="offOut" in="SourceAlpha" dx="20" dy="20" /><feGaussianBlur result="blurOut" in="offOut" stdDeviation="10" /><feBlend in="SourceGraphic" in2="blurOut" mode="normal" /></filter>';
+				visDefs += '<radialGradient id="gradGlow" cx="50%" cy="50%" r="50%" fx="50%" fy="50%"><stop offset="80%" style="stop-color:'+node.data.nodeColor+'; stop-opacity:1" /><stop offset="100%" style="stop-color:'+node.data.nodeColor+';stop-opacity:0" /></radialGradient>';
+				visDefs += '<radialGradient id="gradRound" cx="50%" cy="50%" r="50%" fx="50%" fy="50%"><stop offset="80%" style="stop-color:rgb('+node.data.nodeColorRGB.r+','+node.data.nodeColorRGB.g+','+node.data.nodeColorRGB.b+'); stop-opacity:1" /><stop offset="100%" style="stop-color:rgb('+(node.data.nodeColorRGB.r-100) +','+(node.data.nodeColorRGB.g-100)+','+(node.data.nodeColorRGB.b-100)+');stop-opacity:1" /></radialGradient>';
+				//visDefs += '<radialGradient id="gradRound" cx="50%" cy="50%" r="50%" fx="50%" fy="50%"><stop offset="0%" style="stop-color:rgb(255.23,255,255); stop-opacity:1" /><stop offset="100%" style="stop-color:rgb(0,0,255.45);stop-opacity:1" /></radialGradient>';
+				visDefs += '</defs>'; 
+				ui.innerHTML = visDefs;
+				
+				//ui.append(shadow);
+				ui.append(circlex);
 				ui.append(uiSelected);
 				ui.append(svgText_Data);
+				
+				UI_MAIN_INDEX = 1;
+				UI_SELECTOR_INDEX = 2;
+				UI_TEXT_INDEX = 3;
 				
 				ui.attr('nodeSize',node.data.nodeSize);
 				
@@ -737,8 +951,6 @@
                 //nodeUI.attr('x', pos.x - nodeSize / 2).attr('y', pos.y - nodeSize / 2);
 				var nodesize = nodeUI.attr('nodeSize');
 				nodeUI.attr('transform','translate(' +(pos.x - nodesize/2) + ',' + (pos.y - nodesize/2) + ')');
-				
-				//console.log(nodeUI.getBBox());
             });
 
 			//====== LINK DRAWING ========================================================================================================
@@ -755,29 +967,33 @@
                                .attr('refX', "10")
                                .attr('refY', "5")
                                .attr('markerUnits', "strokeWidth")
-                               .attr('markerWidth', "10")
-                               .attr('markerHeight', "10")
-                               .attr('orient', "auto")
-							   .attr('stroke-width', '3');
+                               .attr('markerWidth', "4")
+                               .attr('markerHeight', "4")
+                               .attr('orient', "auto");
+							   
                 },
 			
-            marker = createMarker('Triangle');
-            marker.append('path')
-			.attr('d', 'M 0 0 L 10 5 L 0 10 z')
+            markerTraingle = createMarker('Triangle');
+            markerTraingle.append('path')
+			//.attr('stroke-width', '3')
+			.attr('d', 'M 0 0 L 12 5 L 0 10 z')
 			.attr('fill','gray');
 
             // Marker should be defined only once in <defs> child element of root <svg> element:
             var defs = graphics.getSvgRoot().append('defs');
-            defs.append(marker);
+            defs.append(markerTraingle);
 
             var geom = Viva.Graph.geom();
 
             graphics.link(function(link){
+				
                 // Notice the Triangle marker-end attribe:
                 return Viva.Graph.svg('path')
                            .attr('stroke', 'gray')
-                           //.attr('stroke-width', '0.1')
-						   .attr('marker-end', 'url(#Triangle)');
+                           .attr('stroke-width', '3')
+						   //.attr('fill', 'gray')
+						   .attr('marker-end', 'url(#Triangle)')
+						   
 						   
             }).placeLink(function(linkUI, fromPos, toPos) {
                 // Here we should take care about
@@ -854,7 +1070,7 @@
 			//renderer2.run();
 //=====================================================================================================================================================================================
 			connectUser();
-			Neo4j_InitAllNodes();
+			Neo4j_GetNodes();
 			document.getElementById('graphContainer').style.background=currentTheme.graphBackground;
 			
 			
@@ -979,18 +1195,32 @@
 	<div id='toolPanel'>
 		<div id='selectedNode'></div>
 	</div>
+	<div id='toolPanel'>
+		<div id='nodeDetails'>
+		</div>
+	</div>
 	
 	</div>
 		<div id='toolPanel'>
 		<div>
-			<button onclick='Neo4j_InitAllNodes()'>Refresh All</button>
+			<button onclick='Neo4j_GetNodes()'>Refresh All</button>
 			<button onclick='increaseNodeSize()'>+</button>
 			<button onclick='decreaseNodeSize()'>-</button>
 			<button onclick='unPinNode()'>^</button>
+			<button onclick='unPinAllNodes()'>^*</button>
 		</div>
 	</div>
 
 
+	</div>
+		<div id='toolPanel'>
+		<div>
+			<button onclick='fontDown()'>+Fv</button>
+			<button onclick='fontUp()'>-F^</button>
+			<button onclick='fontGrow()'>+F</button>
+			<button onclick='fontShrink()'>-F</button>
+		</div>
+	</div>
 	
 	<div id='toolPanel'>
 		<div>
@@ -1017,9 +1247,14 @@
 	<div id='toolPanel'>
 		<div id='newNode'>
 		  Label: <input id="newNodeData" type="text" name="lname"><br>
-		  <button onclick='addNewNode()'>Add new entity</button>
+		  <button onclick='createNode()'>Add new entity</button>
 		</div>
 	</div>
+	
+	
+
+
+	
 
 
 </body>
