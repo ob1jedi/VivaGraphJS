@@ -16,23 +16,53 @@
 		var UI_MAIN_INDEX = 0;
 		var UI_SELECTOR_INDEX = 1;
 		var UI_TEXT_INDEX = 2;
-		
+		//.....Functional variables.......
 		var labelsList = []; //list of neoLabel objects
-		var startupLabels = ["SCHEMA_ROOT", "ROOT"]; //list of strings // 
 		var nodeList = []; //list of node objects
 		var checkedNodes = []; //list of node objects
-		//var displayLabels = [];
-		var currentTheme = new theme();
-		var themes = [];
-		var neo4jUserToken = '';
 		var selectedNodeID = '';
 		var selectedNodeData = '';
 		var selectedNode = '';
 		var selectedNodeUI = '';
 		var bRelate = false;
 		var counter = 10;	
+		//......Connection settings........
 		var defaultNeo4jUsername = 'neo4j';
 		var defaultNeo4jPassword = 'password1234$';
+		var neo4jUserToken = '';
+		var neo4jServerURL = 'http://localhost:7474';
+		
+		
+		//......Display settings............
+		var THEMES = [];
+		var currentTheme = new theme();
+		var startupLabels = ["SCHEMA_ROOT", "ROOT"]; //list of strings // 
+		var MaxLabelLength = 5; //the amount of characters allowed before elipse
+		var labelSize = 30;
+		
+		//Theme 0
+		var themeX = new theme({min:100,max:200},'#cccccc', '#0d0d0d', 'rect'); //light 
+		themeX.shadow = true;
+		themeX.glow = false;
+		THEMES.push(themeX);
+		themeX.linkColor = 'gray';
+		
+		//Theme 1
+		themeX = new theme({min:70,max:150},'#0d0d0d', '#cccccc', 'rect'); //dark
+		themeX.shadow = true;
+		themeX.glow = false;
+		THEMES.push(themeX); //dark
+		themeX.linkColor = 'gray';
+		
+		//Theme 2
+		themeX = new theme({min:0,max:10},'#0d0d0d', '#cccccc', 'rect'); //dark
+		THEMES.push(themeX);
+		themeX.shadow = false;
+		themeX.glow = true;
+		themeX.linkColor = '#3333ff';
+		themeX.entityLabelColor = '#ccffff';
+		
+		currentTheme = THEMES[2];
 		
 		//Singletons...
 		var GRAPH = '';
@@ -43,6 +73,8 @@
 		
 //VISUAL SETTINGS		
 		var hiddenLabels = [
+			'JOBJ',
+			'JCOL',
 			'JSON_OBJECT', 
 			'ELEMENT', 
 			'JSON_NUMBER',
@@ -51,11 +83,7 @@
 			'ROOT',
 			'COLLECTION'
 		];
-		var MaxLabelLength = 5; //the amount of characters allowed before elipse
-		var labelSize = 30;
-		
-		themes.push(new theme({min:70,max:150},'#cccccc', '#0d0d0d', 'rect'));
-		currentTheme = themes[0];
+
 		
 //MODELS	
 		function datax() {
@@ -64,7 +92,7 @@
 		  this.nodeSize = 25;
 		  this.nodeColor = '#ffffff';
 		  this.nodeColorRGB = {r:0,g:0,b:0};
-		  this.nodeOpacity = '0.5'
+		  this.nodeOpacity = '0.9'
 		  this.textColor = '#ffffff';
 		  this.displayLabel = '';
 		  this.isPinned = false; 
@@ -107,7 +135,9 @@
 				"fontsize" (make the font size smaller)
 				"" (no sizing, labels may extend past the boundaries of the node)
 			*/
-			
+			this.shadow = true;
+			this.glow = false;
+			this.linkColor = 'red';
 		}
 		
 		function getNeoLabel(byName)
@@ -160,6 +190,7 @@
 			//var newNodeUI = graphics.getNodeUI(nodeId);
 			//var textWidth = newNodeUI.children[2];
 			//newNodeUI.children[2].attr('x', -textWidth/2);
+			return newNode;
 			
 		}
 				
@@ -207,7 +238,7 @@
 		{
 			if (!nodeId){nodeId = selectedNodeID;}
 			var node = GRAPH.getNode(nodeId);
-			node.data.nodeSize = node.data.nodeSize * 1.1;
+			node.data.nodeSize = node.data.nodeSize * 1.05;
 			addNodeToGraph(node.id,node.data);
 			node.data.toLinks.forEach(function(link){
 				
@@ -254,7 +285,7 @@
 			LabelsDiv.innerHTML = '';
 			labelsList.forEach(function(label,index){
 				LabelsDiv.innerHTML = LabelsDiv.innerHTML + 
-					'<div onclick="highlightLabel('+index+')" id="labelPanel" style="background-color:'+label.color+'">' + label.name + 
+					'<div onclick="highlightLabel('+index+')" id="labelPanel" style="background-color:gray;">' + label.name + 
 					'</div>';
 			});
 		}
@@ -290,11 +321,11 @@
 		
 		function postJSONtoURL(successCallback, body, authToken)
 		{
-			var URL = "http://localhost:7474/db/data/transaction HTTP/1.1";
+			var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
 			//var body = '{"statements" : [ { "statement" : "MATCH (n) RETURN id(n),labels(n)"} ]}';
 	
 			$.ajax({
-					url: 'http://localhost:7474/db/data/transaction/commit',
+					url: neo4jServerURL + "/db/data/transaction/commit",
 					type: 'post',
 					data: body,//{//access_token: 'XXXXXXXXXXXXXXXXXXX'},
 					headers: {
@@ -321,13 +352,18 @@
 			return this;
 		}
 		
+		function GetNodesForSelected()
+		{
+			Neo4j_GetNodesFor(selectedNodeID);
+		}
+		
 		function Neo4j_GetNodesFor(neo_nodeid)
 		{
-			var URL = "http://localhost:7474/db/data/transaction HTTP/1.1";
+			var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
 			var body = '{"statements" : [ { "statement" : "MATCH (n)-[*1]->(m) where id(n) = '+ neo_nodeid +' RETURN id(n), id(m), labels(m), (m)"} ]}';
 	
 			$.ajax({
-					url: 'http://localhost:7474/db/data/transaction/commit',
+					url: neo4jServerURL + "/db/data/transaction/commit",
 					type: 'post',
 					data: body,//{//access_token: 'XXXXXXXXXXXXXXXXXXX'},
 					headers: {
@@ -348,10 +384,12 @@
 								dat.id =row[1];
 								if (row[2]){dat.labels = row[2];}
 								if (row[3]){dat.properties = new neoPropertyList(row[3]);}
-								addDataNode(row[0], dat);
+								var node = addDataNode(row[1], dat);
 								
+								var pos = layout.getNodePosition(row[0]);
+								layout.setNodePosition(row[1], pos.x, pos.y);
 								addDataLink(row[0], row[1]);
-								increaseNodeSize(row[0]);
+								//fixTextWidth();
 							}
 						}
 						
@@ -359,19 +397,61 @@
 				});
 		}
 		
-		function Neo4j_GetNodes(byLabel)
-		{
 		
+		
+		function Neo4j_GetNodesByLabel(byLabel)
+		{
+			
 			var matchPattern = 'n';
-			if (byLabel) {matchPattern += ":" + matchPattern;}
-		//var bodyStart = '{"statements" : [ { "statement" : "MATCH (n) RETURN id(n),labels(n)"} ]}';
-			var URL = "http://localhost:7474/db/data/transaction HTTP/1.1";
+			if (byLabel) {matchPattern += ":" + byLabel;}
+			console.log(matchPattern);
+			var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
 			var body = new neo_APIcall(); 
 			body.statements.push(new neo_Statement('MATCH ('+matchPattern+') RETURN id(n), labels(n), (n)'));
 
 	
 			$.ajax({
-					url: 'http://localhost:7474/db/data/transaction/commit',
+					url: neo4jServerURL + "/db/data/transaction/commit",
+					type: 'post',
+					data: JSON.stringify(body),//{//access_token: 'XXXXXXXXXXXXXXXXXXX'},
+					headers: {
+						"Accept":'application/json; charset=UTF-8',
+						"Content-Type": 'application/json',
+						"Authorization": 'Basic ' + neo4jUserToken
+					},
+					dataType: 'json',
+					success: function (returnbody) {
+						for (var i = 0; i < returnbody.results.length; i++){
+							var result = returnbody.results[i];
+							for (var d = 0; d < result.data.length; d++){
+								var row = result.data[d].row;
+								var dat = new datax;
+								dat.id =row[0];
+								if (row[1]){dat.labels = row[1];}
+								if (row[2]){dat.properties = new neoPropertyList(row[2]);}
+								addDataNode(row[0], dat);
+								
+							}
+						}
+						createLabelDiplay();
+					}
+				});
+		}
+		
+		
+		function Neo4j_InitAllNodes(byLabel)
+		{
+		
+			var matchPattern = 'n';
+			if (byLabel) {matchPattern += ":" + matchPattern;}
+		//var bodyStart = '{"statements" : [ { "statement" : "MATCH (n) RETURN id(n),labels(n)"} ]}';
+			var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
+			var body = new neo_APIcall(); 
+			body.statements.push(new neo_Statement('MATCH ('+matchPattern+') RETURN id(n), labels(n), (n)'));
+
+	
+			$.ajax({
+					url: neo4jServerURL + "/db/data/transaction/commit",
 					type: 'post',
 					data: JSON.stringify(body),//{//access_token: 'XXXXXXXXXXXXXXXXXXX'},
 					headers: {
@@ -403,11 +483,11 @@
 		function Neo4j_InitAllRelations()
 		{
 		
-			var URL = "http://localhost:7474/db/data/transaction HTTP/1.1";
+			var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
 			var body = '{"statements" : [ { "statement" : "MATCH (n)-[*1]->(m) RETURN id(n), id(m)"} ]}';
 	
 			$.ajax({
-					url: 'http://localhost:7474/db/data/transaction/commit',
+					url: neo4jServerURL + "/db/data/transaction/commit",
 					type: 'post',
 					data: body,//{//access_token: 'XXXXXXXXXXXXXXXXXXX'},
 					headers: {
@@ -434,11 +514,11 @@
 		
 		function Neo4j_CreateNode(labelName)
 		{
-			var URL = "http://localhost:7474/db/data/transaction HTTP/1.1";
+			var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
 			var body = '{"statements" : [ { "statement" : "CREATE (n:' + labelName + ') RETURN id(n)"} ]}';
 	
 			$.ajax({
-					url: 'http://localhost:7474/db/data/transaction/commit',
+					url: neo4jServerURL + "/db/data/transaction/commit",
 					type: 'post',
 					data: body,
 					headers: {
@@ -467,11 +547,11 @@
 
 		function Neo4j_DeleteNode(NodeID)
 		{
-			var URL = "http://localhost:7474/db/data/transaction HTTP/1.1";
+			var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
 			var body = '{"statements" : [ { "statement" : "MATCH (n) where ID(n) = '+ NodeID +' DETACH DELETE (n) RETURN ID(n)"} ]}';
 	
 			$.ajax({
-					url: 'http://localhost:7474/db/data/transaction/commit',
+					url: neo4jServerURL + "/db/data/transaction/commit",
 					type: 'post',
 					data: body,
 					headers: {
@@ -503,7 +583,7 @@
 		function Neo4j_CreateRelation(NodeID1, NodeID2, Relation)
 		{
 		
-			var URL = "http://localhost:7474/db/data/transaction HTTP/1.1";
+			var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
 			var body = '{"statements" : [ { "statement" : "';
 			body += ' match (n) where ID(n) = ' + NodeID1;
 			body += ' match (m) where ID(m) = ' + NodeID2;
@@ -513,7 +593,7 @@
 
 			
 			$.ajax({
-					url: 'http://localhost:7474/db/data/transaction/commit',
+					url: neo4jServerURL + "/db/data/transaction/commit",
 					type: 'post',
 					data: body,
 					headers: {
@@ -739,7 +819,7 @@
                        //var strokeWidth = Number(linkUI.attr('stroke-width'));
 					   if (linkUI) {
                            // linkUI is a UI object created by graphics below
-                           linkUI.attr('stroke', isOn ? '#cc3300' : 'gray')
+                           linkUI.attr('stroke', isOn ? '#cc3300' : currentTheme.linkColor)
 							.attr('stroke-width', isOn ? 4 : 3)
 							.attr('markerHeight', "20");
 							//.attr('fill', isOn ? '#cc3300' : 'gray');
@@ -817,12 +897,24 @@
 					.attr('r', node.data.nodeSize)
 					.attr('width', node.data.nodeSize*2)
 					.attr('height', node.data.nodeSize*2)
-					.attr('fill','url(#gradGlow)')//node.data.nodeColor)//'#4dffc3')
+					//.attr('fill','url(#gradGlow)')//node.data.nodeColor)//'#4dffc3')
 					.attr('stroke-width','10')
 					.attr('stroke-opacity','0.5')
 					.attr('stroke-color','transparent')
 					.attr('fill-opacity','0.3'),
 					//.attr('filter','url(#f3)')
+				
+				//Circle elements NODE-CIRCLE
+				circleGlow = Viva.Graph.svg('circle')
+					.attr('cx', node.data.nodeSize/2)
+					.attr('cy', node.data.nodeSize/2)
+					.attr('r', node.data.nodeSize*1.7)
+					.attr('fill','url(#gradGlow)')//node.data.nodeColor)//'#4dffc3')
+					//.attr('stroke-width','5')
+					//.attr('stroke-opacity','0.6')
+					//.attr('filter','url(#f3)')
+					.attr('fill-opacity',0.5);
+				if (!currentTheme.glow) {circleGlow.attr('fill','transparent');}
 					
 				//Circle elements NODE-CIRCLE
 				circlex = Viva.Graph.svg('circle')
@@ -832,9 +924,9 @@
 					.attr('fill','url(#gradRound)')//node.data.nodeColor)//'#4dffc3')
 					.attr('stroke-width','5')
 					.attr('stroke-opacity','0.6')
-					.attr('filter','url(#f3)')
-					.attr('fill-opacity',node.data.nodeOpacity),
-
+					.attr('fill-opacity',node.data.nodeOpacity);
+				if (currentTheme.shadow) {circlex.attr('filter','url(#f3)');} //shadow
+					
 				uiSelected = Viva.Graph.svg('circle')
 					.attr('cx', node.data.nodeSize/2) //...for circle
 					.attr('cy', node.data.nodeSize/2)//...for circle
@@ -897,6 +989,14 @@
 					
                 }),
 				
+				$(ui).dblclick(function() { // MOUSE CLICK
+                    GetNodesForSelected();
+					//layout.pinNode(node, true);
+					//selectedNodeUI.children[UI_MAIN_INDEX].attr('filter',''); //it works, just doesn't contribute to the look & feel.
+					//node.data.isPinned = true;
+					
+                }),
+				
 				$(ui).mousedown(function() { // MOUSE DOWN
                     //highlightSelectedNode(node.id);
                 }),
@@ -926,20 +1026,22 @@
 
 				var visDefs = '<defs>';
 				visDefs += '<filter id="f3" x="0" y="0" width="200%" height="200%"><feOffset result="offOut" in="SourceAlpha" dx="20" dy="20" /><feGaussianBlur result="blurOut" in="offOut" stdDeviation="10" /><feBlend in="SourceGraphic" in2="blurOut" mode="normal" /></filter>';
-				visDefs += '<radialGradient id="gradGlow" cx="50%" cy="50%" r="50%" fx="50%" fy="50%"><stop offset="80%" style="stop-color:'+node.data.nodeColor+'; stop-opacity:1" /><stop offset="100%" style="stop-color:'+node.data.nodeColor+';stop-opacity:0" /></radialGradient>';
+				visDefs += '<radialGradient id="gradGlow" cx="50%" cy="50%" r="50%" fx="50%" fy="50%"><stop offset="0%" style="stop-color:#ffffff; stop-opacity:1" /><stop offset="100%" style="stop-color:#66e0ff;stop-opacity:0" /></radialGradient>';
 				visDefs += '<radialGradient id="gradRound" cx="50%" cy="50%" r="50%" fx="50%" fy="50%"><stop offset="80%" style="stop-color:rgb('+node.data.nodeColorRGB.r+','+node.data.nodeColorRGB.g+','+node.data.nodeColorRGB.b+'); stop-opacity:1" /><stop offset="100%" style="stop-color:rgb('+(node.data.nodeColorRGB.r-100) +','+(node.data.nodeColorRGB.g-100)+','+(node.data.nodeColorRGB.b-100)+');stop-opacity:1" /></radialGradient>';
 				//visDefs += '<radialGradient id="gradRound" cx="50%" cy="50%" r="50%" fx="50%" fy="50%"><stop offset="0%" style="stop-color:rgb(255.23,255,255); stop-opacity:1" /><stop offset="100%" style="stop-color:rgb(0,0,255.45);stop-opacity:1" /></radialGradient>';
 				visDefs += '</defs>'; 
 				ui.innerHTML = visDefs;
 				
-				//ui.append(shadow);
+				UI_MAIN_INDEX = 1;
+				UI_SELECTOR_INDEX = 2;
+				UI_TEXT_INDEX = 3;
+				
+				if (currentTheme.glow){ui.append(circleGlow); UI_MAIN_INDEX++; UI_SELECTOR_INDEX++; UI_TEXT_INDEX++;}
 				ui.append(circlex);
 				ui.append(uiSelected);
 				ui.append(svgText_Data);
 				
-				UI_MAIN_INDEX = 1;
-				UI_SELECTOR_INDEX = 2;
-				UI_TEXT_INDEX = 3;
+
 				
 				ui.attr('nodeSize',node.data.nodeSize);
 				
@@ -977,7 +1079,7 @@
             markerTraingle.append('path')
 			//.attr('stroke-width', '3')
 			.attr('d', 'M 0 0 L 12 5 L 0 10 z')
-			.attr('fill','gray');
+			.attr('fill',currentTheme.linkColor);
 
             // Marker should be defined only once in <defs> child element of root <svg> element:
             var defs = graphics.getSvgRoot().append('defs');
@@ -989,11 +1091,10 @@
 				
                 // Notice the Triangle marker-end attribe:
                 return Viva.Graph.svg('path')
-                           .attr('stroke', 'gray')
+                           .attr('stroke', currentTheme.linkColor)
                            .attr('stroke-width', '3')
-						   //.attr('fill', 'gray')
 						   .attr('marker-end', 'url(#Triangle)')
-						   
+						   .attr('stroke-opacity', '0.5')
 						   
             }).placeLink(function(linkUI, fromPos, toPos) {
                 // Here we should take care about
@@ -1070,7 +1171,10 @@
 			//renderer2.run();
 //=====================================================================================================================================================================================
 			connectUser();
-			Neo4j_GetNodes();
+			//Neo4j_InitAllNodes();
+			startupLabels.forEach(function(label){
+					Neo4j_GetNodesByLabel(label);
+			});
 			document.getElementById('graphContainer').style.background=currentTheme.graphBackground;
 			
 			
@@ -1203,7 +1307,7 @@
 	</div>
 		<div id='toolPanel'>
 		<div>
-			<button onclick='Neo4j_GetNodes()'>Refresh All</button>
+			<button onclick='Neo4j_InitAllNodes()'>Refresh All</button>
 			<button onclick='increaseNodeSize()'>+</button>
 			<button onclick='decreaseNodeSize()'>-</button>
 			<button onclick='unPinNode()'>^</button>
@@ -1211,6 +1315,14 @@
 		</div>
 	</div>
 
+	</div>
+		<div id='toolPanel'>
+		<div>
+			<button onclick='GetNodesForSelected()'>Get Next</button>
+			<button onclick='Neo4j_InitAllNodes()'>Get All</button>
+		</div>
+	</div>
+	
 
 	</div>
 		<div id='toolPanel'>
