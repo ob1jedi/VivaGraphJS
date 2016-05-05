@@ -19,6 +19,7 @@
 		//.....Functional variables.......
 		var labelsList = []; //list of neoLabel objects
 		var nodeList = []; //list of node objects
+		var linkList = []; //list of link objects
 		var checkedNodes = []; //list of node objects
 		var selectedNodeID = '';
 		var selectedNodeData = '';
@@ -31,7 +32,8 @@
 		var defaultNeo4jPassword = 'password1234$';
 		var neo4jUserToken = '';
 		var neo4jServerURL = 'http://localhost:7474';
-		
+		var config = Configuration(connectUser);
+
 		
 		//......Display settings............
 		var THEMES = [];
@@ -156,12 +158,21 @@
 		function Neo4j_Connect()
 		{ //This just creates a base64 string from the users Neo4j creds, 
 		  //which then gets passed in as authentication along with their API call.
-			connectUser();
+			//connectUser(config);
+			//Neo4j_InitAllNodes();
+
 			hideNeo4jConnect();
+		}
+		
+		function ConnectFromConfig(configuration)
+		{
+			console.log('config:' + configuration);
 		}
 		
 		function addDataNode(nodeId, nodeData)
 		{
+			if (GRAPH.getNode(nodeId))return;
+			console.log("Adding node");
 			nodeData.labels.forEach(function(label, index){
 				if(!getNeoLabel(label)) {
 					var rgb = {r: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max)),
@@ -357,6 +368,13 @@
 			Neo4j_GetNodesFor(selectedNodeID);
 		}
 		
+		function Configuration(callback)
+		{
+			var body;
+			$(document).ready(function(e) {
+				callback(jsonObject.Configuration);
+			});
+		}
 		function Neo4j_GetNodesFor(neo_nodeid)
 		{
 			var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
@@ -379,16 +397,16 @@
 							var result = returnbody.results[i];
 							for (var d = 0; d < result.data.length; d++){
 								var row = result.data[d].row;
-								
 								var dat = new datax;
 								dat.id =row[1];
 								if (row[2]){dat.labels = row[2];}
 								if (row[3]){dat.properties = new neoPropertyList(row[3]);}
-								var node = addDataNode(row[1], dat);
-								
-								var pos = layout.getNodePosition(row[0]);
-								layout.setNodePosition(row[1], pos.x, pos.y);
-								addDataLink(row[0], row[1]);
+								if (!GRAPH.getNode(row[1])){
+									var node = addDataNode(row[1], dat);									
+									var pos = layout.getNodePosition(row[0]);
+									layout.setNodePosition(row[1], pos.x, pos.y);
+									addDataLink(row[0], row[1]);
+								}
 								//fixTextWidth();
 							}
 						}
@@ -429,8 +447,9 @@
 								dat.id =row[0];
 								if (row[1]){dat.labels = row[1];}
 								if (row[2]){dat.properties = new neoPropertyList(row[2]);}
-								addDataNode(row[0], dat);
-								
+								if (!GRAPH.getNode(row[0])){
+									addDataNode(row[0], dat);
+								}
 							}
 						}
 						createLabelDiplay();
@@ -469,8 +488,9 @@
 								dat.id =row[0];
 								if (row[2]){dat.properties = new neoPropertyList(row[2]);}
 								if (row[1]){dat.labels = row[1];}
-								addDataNode(row[0], dat);
-								
+								if (!GRAPH.getNode(row[0])){
+									addDataNode(row[0], dat);
+								}
 							}
 						}
 						createLabelDiplay();
@@ -538,7 +558,9 @@
 								var dat = new datax;
 								dat.id = row[0];
 								if (labelName) {dat.labels.push(labelName);}
-								addDataNode(row[0],dat);
+								if (!GRAPH.getNode(row[0])){
+									addDataNode(row[0],dat);
+								}
 							}
 						}					
 					}
@@ -636,17 +658,27 @@
 		
 //UI MANIPULATION
 		
-		function connectUser(){
+		function connectUser(config){
 			
 			var userName, userPassword;
-			if (document.getElementById('usrname'))
-				userName = document.getElementById('usrname').value;
-			if (document.getElementById('psswrd'))
-				userPassword = document.getElementById('psswrd').value;
-			if (!userName) userName=defaultNeo4jUsername;
-			if (!userPassword) userPassword=defaultNeo4jPassword;
+			//if (document.getElementById('usrname'))
+			//	userName = document.getElementById('usrname').value;
+			//if (document.getElementById('psswrd'))
+			//	userPassword = document.getElementById('psswrd').value;
+			//if (!userName) userName=defaultNeo4jUsername;
+			//if (!userPassword) userPassword=defaultNeo4jPassword;
+			userPassword = config.password;
+			userName = config.username;
+			neo4jServerURL = config.server;
+			
 			//Call Base64 function to get token...
 			neo4jUserToken =  window.btoa(userName + ':' + userPassword);
+			
+			startupLabels.forEach(function(label){
+					Neo4j_GetNodesByLabel(label);
+				});
+				
+			
 		}
 		
 		function hideNeo4jConnect(){
@@ -997,20 +1029,6 @@
 					
                 }),
 				
-				$(ui).mousedown(function() { // MOUSE DOWN
-                    //highlightSelectedNode(node.id);
-                }),
-				
-
-	
-				$(ui).mouseup(function() { // MOUSE UP
-                    //highlightSelectedNode(node.id);
-                }),
-				
-				$(ui).toggle(function() { // TOGGLE
-                    //highlightSelectedNode(node.id);
-                }),
-				
 				$(ui).hover(function() { // MOUSE HOVER
                     highlightRelatedNodes(node.id, true);
 					
@@ -1170,11 +1188,11 @@
             renderer.run();
 			//renderer2.run();
 //=====================================================================================================================================================================================
-			connectUser();
+			//connectUser();
 			//Neo4j_InitAllNodes();
-			startupLabels.forEach(function(label){
-					Neo4j_GetNodesByLabel(label);
-			});
+			//startupLabels.forEach(function(label){
+			//		Neo4j_GetNodesByLabel(label);
+			//});
 			document.getElementById('graphContainer').style.background=currentTheme.graphBackground;
 			
 			
@@ -1344,8 +1362,6 @@
 	<div id='toolPanel'>
 		<div id='connectDets'>		
 			Neo4j Username & Password:<br/> 
-			<input id='password' value='neo4j'></input>
-			<input id='psswrd' type="password"  value='password1234$'></input>
 			<button onclick='Neo4j_Connect()'>Connect</button>
 		</div>
 	</div>
