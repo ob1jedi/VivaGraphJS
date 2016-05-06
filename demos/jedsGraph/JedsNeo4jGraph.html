@@ -56,15 +56,26 @@
 		THEMES.push(themeX); //dark
 		themeX.linkColor = 'gray';
 		
-		//Theme 2
+		//Theme 2 (Black hole)
 		themeX = new theme({min:0,max:10},'#0d0d0d', '#cccccc', 'rect'); //dark
 		THEMES.push(themeX);
 		themeX.shadow = false;
+		themeX.rounded = false;
 		themeX.glow = true;
 		themeX.linkColor = '#3333ff';
 		themeX.entityLabelColor = '#ccffff';
 		
-		currentTheme = THEMES[2];
+		//Theme 3 (eco 1)
+		themeX = new theme({min:50,max:100},'#262626', '#262626', 'rect'); //dark
+		THEMES.push(themeX);
+		themeX.shadow = false;
+		themeX.glow = false;
+		themeX.rounded = false;
+		themeX.linkColor = '#999999';
+		themeX.entityLabelColor = '#e6e6e6';
+		themeX.opaque = true;
+		themeX.labelSizing = 'none';
+		currentTheme = THEMES[3];
 		
 		//Singletons...
 		var GRAPH = '';
@@ -92,7 +103,7 @@
 		  this.id = 0;
 		  this.labels = [];
 		  this.nodeSize = 25;
-		  this.nodeColor = '#ffffff';
+		  this.nodeColor = '#808080';
 		  this.nodeColorRGB = {r:0,g:0,b:0};
 		  this.nodeOpacity = '0.9'
 		  this.textColor = '#ffffff';
@@ -120,6 +131,13 @@
 			return this;
 		}
 		
+		function linkType(fromNodeID, toNodeID)
+		{
+			this.FromNodeID = fromNodeID;
+			this.ToNodeID = toNodeID;
+			return this;
+		}
+		
 		function theme(entityRgbRange, graphBackground, entityLabelColor, entityShape)
 		{
 			this.entityRgbRange = (entityRgbRange)?entityRgbRange: {min:100,max:200};
@@ -127,6 +145,7 @@
 			this.graphBackground = (graphBackground)?graphBackground: '#1a1a1a';
 			this.entityLabelColor = (entityLabelColor)?entityLabelColor: 'white';
 			this.entityShape = (entityShape)?entityShape: 'rect';
+			this.opaque = false;
 			/*choices: 
 				rect (entities are rectangular)
 				circle (entities are circles)
@@ -140,6 +159,7 @@
 			this.shadow = true;
 			this.glow = false;
 			this.linkColor = 'red';
+			this.rounded = false;
 		}
 		
 		function getNeoLabel(byName)
@@ -153,7 +173,18 @@
 			});
 			return x;
 		}
-
+		function getLinkType(fromNodeID, toNodeID)
+		{
+			var x;
+				linkList.forEach(function(link, index){
+				if (link.FromNodeID == fromNodeID && link.ToNodeID == toNodeID){
+					x = link;
+					return link;
+				}
+			});
+			return x;
+		}
+		
 //CUSTOM GRAPH FUNCTIONS
 		function Neo4j_Connect()
 		{ //This just creates a base64 string from the users Neo4j creds, 
@@ -164,15 +195,9 @@
 			hideNeo4jConnect();
 		}
 		
-		function ConnectFromConfig(configuration)
-		{
-			console.log('config:' + configuration);
-		}
-		
 		function addDataNode(nodeId, nodeData)
 		{
-			if (GRAPH.getNode(nodeId))return;
-			console.log("Adding node");
+			//if (GRAPH.getNode(nodeId))return;
 			nodeData.labels.forEach(function(label, index){
 				if(!getNeoLabel(label)) {
 					var rgb = {r: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max)),
@@ -210,7 +235,7 @@
 			//var linkData = {};relationshipData;
 			//linkData.connectionStrength = 110;
 			var link = GRAPH.addLink(fromNodeID, toNodeID, relationshipData);
-			
+			linkList.push(new linkType(fromNodeID,toNodeID)); 
 			//var otherLinks = GRAPH.getLinks(fromNodeID);
 			//otherLinks.forEach(function(otherlink) {
 			//	otherlink.data.connectionStrength+= 1;
@@ -405,12 +430,16 @@
 									var node = addDataNode(row[1], dat);									
 									var pos = layout.getNodePosition(row[0]);
 									layout.setNodePosition(row[1], pos.x, pos.y);
+									
+								}
+								if (!getLinkType(row[0], row[1]))
+								{
 									addDataLink(row[0], row[1]);
 								}
 								//fixTextWidth();
 							}
 						}
-						
+						createLabelDiplay();
 					}
 				});
 		}
@@ -422,7 +451,6 @@
 			
 			var matchPattern = 'n';
 			if (byLabel) {matchPattern += ":" + byLabel;}
-			console.log(matchPattern);
 			var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
 			var body = new neo_APIcall(); 
 			body.statements.push(new neo_Statement('MATCH ('+matchPattern+') RETURN id(n), labels(n), (n)'));
@@ -453,6 +481,7 @@
 							}
 						}
 						createLabelDiplay();
+						//Neo4j_InitAllRelations();
 					}
 				});
 		}
@@ -494,12 +523,13 @@
 							}
 						}
 						createLabelDiplay();
+						Neo4j_InitAllRelations();
 					}
 				});
 				
-				Neo4j_InitAllRelations();
+				
 		}
-		
+	
 		function Neo4j_InitAllRelations()
 		{
 		
@@ -523,8 +553,11 @@
 							var result = returnbody.results[i];
 							for (var d = 0; d < result.data.length; d++){
 								var row = result.data[d].row;
-								addDataLink(row[0], row[1]);
-								increaseNodeSize(row[0]);
+								if (!getLinkType(row[0], row[1]))
+								{
+									addDataLink(row[0], row[1]);
+									increaseNodeSize(row[0]);
+								}
 							}
 						}
 						
@@ -933,32 +966,36 @@
 					.attr('stroke-width','10')
 					.attr('stroke-opacity','0.5')
 					.attr('stroke-color','transparent')
-					.attr('fill-opacity','0.3'),
+					//.attr('fill-opacity','0.3'),
 					//.attr('filter','url(#f3)')
+				if (!currentTheme.opaque) {rectx.attr('fill-opacity',0.3);}
 				
 				//Circle elements NODE-CIRCLE
 				circleGlow = Viva.Graph.svg('circle')
 					.attr('cx', node.data.nodeSize/2)
 					.attr('cy', node.data.nodeSize/2)
 					.attr('r', node.data.nodeSize*1.7)
-					.attr('fill','url(#gradGlow)')//node.data.nodeColor)//'#4dffc3')
+					.attr('fill','transparent')//node.data.nodeColor)//'#4dffc3')
 					//.attr('stroke-width','5')
 					//.attr('stroke-opacity','0.6')
 					//.attr('filter','url(#f3)')
-					.attr('fill-opacity',0.5);
-				if (!currentTheme.glow) {circleGlow.attr('fill','transparent');}
-					
+					//.attr('fill-opacity',0.5);
+				if (currentTheme.glow) {circleGlow.attr('fill','url(#gradGlow)');}
+				if (!currentTheme.opaque) {circleGlow.attr('fill-opacity',0.5);}
+				
 				//Circle elements NODE-CIRCLE
 				circlex = Viva.Graph.svg('circle')
 					.attr('cx', node.data.nodeSize/2)
 					.attr('cy', node.data.nodeSize/2)
 					.attr('r', node.data.nodeSize)
-					.attr('fill','url(#gradRound)')//node.data.nodeColor)//'#4dffc3')
+					.attr('fill',node.data.nodeColor)//node.data.nodeColor)//'#4dffc3')
 					.attr('stroke-width','5')
 					.attr('stroke-opacity','0.6')
-					.attr('fill-opacity',node.data.nodeOpacity);
+					//.attr('fill-opacity',node.data.nodeOpacity);
 				if (currentTheme.shadow) {circlex.attr('filter','url(#f3)');} //shadow
-					
+				if (currentTheme.rounded) {circlex.attr('fill','url(#gradRound)');}
+				if (!currentTheme.opaque) {circlex.attr('fill-opacity',node.data.nodeOpacity);}
+				
 				uiSelected = Viva.Graph.svg('circle')
 					.attr('cx', node.data.nodeSize/2) //...for circle
 					.attr('cy', node.data.nodeSize/2)//...for circle
@@ -972,8 +1009,9 @@
 					.attr('stroke-color','transparent')
 					.attr('stroke-opacity','0.5')
 					.attr('stroke-width',node.data.nodeSize/5)
-					.attr('fill-opacity',0.2),
-
+					//.attr('fill-opacity',0.2),
+					if (!currentTheme.opaque) {uiSelected.attr('fill-opacity',0.2);}
+					
 				//Text elements... NODE-ID
 				svgText_Data = Viva.Graph.svg('text')
 					.attr('y', 0) //node.data.nodeSize/2 + 5)
@@ -984,9 +1022,9 @@
 					.attr('font-size','20')
 					//.attr('font-size',node.data.nodeSize)
 					.attr('text-decoration', 'underline')
-					.attr('font-weight', 'bold')
+					//.attr('font-weight', 'bold')
 					.text(node.data.displayLabel),
-					
+					//if (!currentTheme.opaque) {svgText_Data.attr('fill-opacity',1);}
 				
 				//Text elements... NODE-DATA
 				//svgText = Viva.Graph.svg('text')
@@ -1108,12 +1146,12 @@
             graphics.link(function(link){
 				
                 // Notice the Triangle marker-end attribe:
-                return Viva.Graph.svg('path')
+                var linkPath = Viva.Graph.svg('path')
                            .attr('stroke', currentTheme.linkColor)
                            .attr('stroke-width', '3')
 						   .attr('marker-end', 'url(#Triangle)')
-						   .attr('stroke-opacity', '0.5')
-						   
+						   if (!currentTheme.opaque) {linkPath.attr('stroke-opacity', 0.5);}
+				return linkPath;   
             }).placeLink(function(linkUI, fromPos, toPos) {
                 // Here we should take care about
                 //  "Links should start/stop at node's bounding box, not at the node center."
