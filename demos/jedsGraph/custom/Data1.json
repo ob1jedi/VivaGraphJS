@@ -1,7 +1,12 @@
 var jsonObject = {
 "Configuration":
-	{	"server":"http://localhost:7474",
-		"username":"neo4j",
-		"password":"password1234$"
+	{
+	"neo4jconnection":
+		{	"server":"http://localhost:7474",
+			"username":"neo4j",
+			"password":"password1234$"
+		},
+	"viewoptions":{},
+	"displaySettings":{}
 	}
 }

@@ -33,7 +33,9 @@
 		var neo4jUserToken = '';
 		var neo4jServerURL = 'http://localhost:7474';
 		var config = Configuration(connectUser);
-
+	
+		//......Filter settings.............
+		var viewOptions = new viewOptionsType();
 		
 		//......Display settings............
 		var THEMES = [];
@@ -112,6 +114,8 @@
 		  this.properties = [];
 		  this.toLinks = [];
 		  this.fromLinks = [];
+		  this.toNodes = [];
+		  this.fromNodes = [];
 		}
 		
 		function neoPropertyList(obj)
@@ -135,6 +139,14 @@
 		{
 			this.FromNodeID = fromNodeID;
 			this.ToNodeID = toNodeID;
+			return this;
+		}
+		
+		function viewOptionsType()
+		{
+			this.highlightRelated = true;
+			this.highlightAncestors = false;
+			this.highlightDecendants = false;
 			return this;
 		}
 		
@@ -173,7 +185,7 @@
 			});
 			return x;
 		}
-		function getLinkType(fromNodeID, toNodeID)
+		function getDataLink(fromNodeID, toNodeID)
 		{
 			var x;
 				linkList.forEach(function(link, index){
@@ -184,7 +196,29 @@
 			});
 			return x;
 		}
+		function getDataNode(nodeID)
+		{
+			var x;
+				nodeList.forEach(function(node, index){
+				if (node.id == nodeID){
+					x = node;
+					return node;
+				}
+			});
+			return x;
+		}
 		
+		function neo_APIcall()
+		{
+			this.statements = [];
+			return this;
+		}
+		
+		function neo_Statement(statement)
+		{
+			this.statement = statement;
+			return this;
+		}
 //CUSTOM GRAPH FUNCTIONS
 		function Neo4j_Connect()
 		{ //This just creates a base64 string from the users Neo4j creds, 
@@ -198,35 +232,39 @@
 		function addDataNode(nodeId, nodeData)
 		{
 			//if (GRAPH.getNode(nodeId))return;
-			nodeData.labels.forEach(function(label, index){
-				if(!getNeoLabel(label)) {
-					var rgb = {r: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max)),
-							   g: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max)),
-							   b: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max))
+			var dataNode = getDataNode(nodeId);
+			if (!dataNode){
+				nodeData.labels.forEach(function(label, index){
+					if(!getNeoLabel(label)) {
+						var rgb = {r: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max)),
+								   g: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max)),
+								   b: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max))
+						}
+						var randomColor = rgb2hex(rgb.r, rgb.g, rgb.b);
+						var newLabel = new neoLabel(label, randomColor, rgb);
+						
+						labelsList.push(newLabel);
+						//addVisLabel(newLabel, labelsList.length-1);
 					}
-					var randomColor = rgb2hex(rgb.r, rgb.g, rgb.b);
-					var newLabel = new neoLabel(label, randomColor, rgb);
 					
-					labelsList.push(newLabel);
-					//addVisLabel(newLabel, labelsList.length-1);
-				}
+					//Don't show hidden labels...
+					if (hiddenLabels.indexOf(label) < 0){
+						if (nodeData.displayLabel) {nodeData.displayLabel += ','}
+						nodeData.displayLabel = nodeData.displayLabel + label;
+					}
+				});
 				
-				//Don't show hidden labels...
-				if (hiddenLabels.indexOf(label) < 0){
-					if (nodeData.displayLabel) {nodeData.displayLabel += ','}
-					nodeData.displayLabel = nodeData.displayLabel + label;
-				}
-			});
-			
-			//nodeData.displayLabel;
-			var aNeoLabel = getNeoLabel(nodeData.labels[0]);
-			if (aNeoLabel) {nodeData.nodeColor = aNeoLabel.color; nodeData.nodeColorRGB = aNeoLabel.colorRGB;}
-			var newNode = addNodeToGraph(nodeId,nodeData);
-			nodeList.push(newNode);
+				//nodeData.displayLabel;
+				var aNeoLabel = getNeoLabel(nodeData.labels[0]);
+				if (aNeoLabel) {nodeData.nodeColor = aNeoLabel.color; nodeData.nodeColorRGB = aNeoLabel.colorRGB;}
+				dataNode = addNodeToGraph(nodeId,nodeData);
+				nodeList.push(dataNode);
+				
+			}
 			//var newNodeUI = graphics.getNodeUI(nodeId);
 			//var textWidth = newNodeUI.children[2];
 			//newNodeUI.children[2].attr('x', -textWidth/2);
-			return newNode;
+			return dataNode;
 			
 		}
 				
@@ -241,11 +279,16 @@
 			//	otherlink.data.connectionStrength+= 1;
 			//});
 			var toNode = GRAPH.getNode(toNodeID);
-			var fromNode = GRAPH.getNode(toNodeID);
+			var fromNode = GRAPH.getNode(fromNodeID);
 			var linkUI = graphics.getLinkUI(link.id);
 			linkUI.attr('fromNode',fromNodeID).attr('toNode',toNodeID);
-			toNode.data.toLinks.push(link);
-			fromNode.data.fromLinks.push(link);
+			
+			toNode.data.fromLinks.push(link);
+			toNode.data.fromNodes.push(fromNode);
+			
+			fromNode.data.toLinks.push(link);
+			fromNode.data.toNodes.push(toNode);
+			
 			increaseNodeSize(fromNodeID);
 		}
 			
@@ -253,6 +296,13 @@
 		{
 			layout.pinNode(selectedNode, false);
 			selectedNode.data.isPinned = false;
+		}
+		
+		function updateViewOptions()
+		{
+			viewOptions.highlightRelated = document.getElementById('vo.hr').checked;
+			viewOptions.highlightAncestors = document.getElementById('vo.ha').checked;
+			viewOptions.highlightDecendants = document.getElementById('vo.hd').checked;
 		}
 		
 		function unPinAllNodes()
@@ -276,11 +326,10 @@
 			var node = GRAPH.getNode(nodeId);
 			node.data.nodeSize = node.data.nodeSize * 1.05;
 			addNodeToGraph(node.id,node.data);
-			node.data.toLinks.forEach(function(link){
-				
-				var linkUI = graphics.getLinkUI(link.id);
+			//node.data.toLinks.forEach(function(link){
+				//var linkUI = graphics.getLinkUI(link.id);
 				//linkUI.attr('stroke-width',node.data.nodeSize/5);
-			});			
+			//});			
 		}		
 
 		function decreaseNodeSize(nodeId)
@@ -355,11 +404,19 @@
 			while(new Date().getTime() < now + sleepDuration){ /* do nothing */ } 
 		}
 		
-		function postJSONtoURL(successCallback, body, authToken)
+
+//AJAX CALLS
+		
+		
+		function Neo4j_Command(statements, successCallback, failCallback)
 		{
 			var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
 			//var body = '{"statements" : [ { "statement" : "MATCH (n) RETURN id(n),labels(n)"} ]}';
-	
+			var body = new neo_APIcall(); 
+			statements.forEach(function(statement){
+				body.statements.push(new neo_Statement(statement));
+			});
+
 			$.ajax({
 					url: neo4jServerURL + "/db/data/transaction/commit",
 					type: 'post',
@@ -367,26 +424,18 @@
 					headers: {
 						"Accept":'application/json; charset=UTF-8',
 						"Content-Type": 'application/json',
-						"Authorization": 'Basic ' + authToken
+						"Authorization": 'Basic ' + neo4jUserToken
 					},
 					dataType: 'json',
-					success: successCallback(),
-					error: failCallback()
+					success: function (returnbody){
+						if (successCallback){successCallback();}
+					},
+					error: function (returnbody){if (failCallback){failCallback();}}()
 				});
 				
 		}
-//AJAX CALLS
+		
 
-		function neo_APIcall()
-		{
-			this.statements = [];
-			return this;
-		}
-		function neo_Statement(statement)
-		{
-			this.statement = statement;
-			return this;
-		}
 		
 		function GetNodesForSelected()
 		{
@@ -416,7 +465,6 @@
 					},
 					dataType: 'json',
 					success: function (returnbody) {
-						//console.info(returnbody);
 						for (var i = 0; i < returnbody.results.length; i++){
 							
 							var result = returnbody.results[i];
@@ -432,7 +480,7 @@
 									layout.setNodePosition(row[1], pos.x, pos.y);
 									
 								}
-								if (!getLinkType(row[0], row[1]))
+								if (!getDataLink(row[0], row[1]))
 								{
 									addDataLink(row[0], row[1]);
 								}
@@ -547,13 +595,12 @@
 					},
 					dataType: 'json',
 					success: function (returnbody) {
-						//console.info(returnbody);
 						for (var i = 0; i < returnbody.results.length; i++){
 							
 							var result = returnbody.results[i];
 							for (var d = 0; d < result.data.length; d++){
 								var row = result.data[d].row;
-								if (!getLinkType(row[0], row[1]))
+								if (!getDataLink(row[0], row[1]))
 								{
 									addDataLink(row[0], row[1]);
 									increaseNodeSize(row[0]);
@@ -581,12 +628,10 @@
 					},
 					dataType: 'json',
 					success: function (returnbody) {	
-						//console.info(returnbody);
 						for (var i = 0; i < returnbody.results.length; i++){
 							
 							var result = returnbody.results[i];
 							for (var d = 0; d < result.data.length; d++){
-								//console.info(returnbody.results[i].data[d].row[0]);
 								var row = result.data[d].row;
 								var dat = new datax;
 								dat.id = row[0];
@@ -616,12 +661,11 @@
 					},
 					dataType: 'json',
 					success: function (returnbody) {	
-						//console.info(returnbody);
+
 						for (var i = 0; i < returnbody.results.length; i++){
 							
 							var result = returnbody.results[i];
 							for (var d = 0; d < result.data.length; d++){
-								//console.info(returnbody.results[i].data[d].row[0]);
 								var row = result.data[d].row;
 								if (row[0]){
 									GRAPH.removeNode(row[0]);
@@ -658,12 +702,10 @@
 					},
 					dataType: 'json',
 					success: function (returnbody) {	
-						console.info(returnbody);
 						for (var i = 0; i < returnbody.results.length; i++){
 							
 							var result = returnbody.results[i];
 							for (var d = 0; d < result.data.length; d++){
-								//console.info(returnbody.results[i].data[d].row[0]);
 								var row = result.data[d].row;
 								if (row[0]){
 
@@ -694,15 +736,9 @@
 		function connectUser(config){
 			
 			var userName, userPassword;
-			//if (document.getElementById('usrname'))
-			//	userName = document.getElementById('usrname').value;
-			//if (document.getElementById('psswrd'))
-			//	userPassword = document.getElementById('psswrd').value;
-			//if (!userName) userName=defaultNeo4jUsername;
-			//if (!userPassword) userPassword=defaultNeo4jPassword;
-			userPassword = config.password;
-			userName = config.username;
-			neo4jServerURL = config.server;
+			userPassword = config.neo4jconnection.password;
+			userName = config.neo4jconnection.username;
+			neo4jServerURL = config.neo4jconnection.server;
 			
 			//Call Base64 function to get token...
 			neo4jUserToken =  window.btoa(userName + ':' + userPassword);
@@ -732,7 +768,6 @@
 			var processingElement = document.getElementById('log');
 			node.data.labels.push(processingElement.value);
 			addNodeToGraph(selectedNodeID,node.data);
-			
 		}
 		
 		function relateSelectedToNode(){
@@ -805,6 +840,11 @@
 			var heightOfNode = Number(nodeUI.children[UI_MAIN_INDEX].getBBox().height);
 			nodeUI.children[UI_TEXT_INDEX].attr('y', heightOfNode/3);
 		}
+		function deleteLabel(nodeId, labelName)
+		{
+			var command = "MATCH (n) where ID(n) = " + nodeId + " REMOVE n:" + labelName;
+			Neo4j_Command([command], update);
+		}	
 		
 		function showNodeDetails(node)
 		{
@@ -821,7 +861,9 @@
 			var labellist = ''
 			node.data.labels.forEach(function(label, index){
 				if (index!=0){labellist += ', ';}
-				labellist += label;
+				var button_onclick = 'deleteLabel(' + node.id + ', \'' + label + '\')';
+				labellist += '<a>' + label + '<button class="fortext tooltip" onclick="'+button_onclick+'" >X<div class="tooltiptext">delete label</div></button></a>'
+				
 			});
 			var html = '<a style="text-decoration: underline; font-weight: bold;">Selected entity ID<a>: ' + selectedNodeID;
 			html += '<br/><a style="text-decoration: underline; font-weight: bold;">Entity type<a>:<br/>' + labellist;
@@ -886,11 +928,62 @@
                            // linkUI is a UI object created by graphics below
                            linkUI.attr('stroke', isOn ? '#cc3300' : currentTheme.linkColor)
 							.attr('stroke-width', isOn ? 4 : 3)
-							.attr('markerHeight', "20");
+							//.attr('markerHeight', "20");
 							//.attr('fill', isOn ? '#cc3300' : 'gray');
                        }
                    });
                 },
+				//------------------------------------------------------------------------------------
+				highlightDecendantNodes = function(nodeId, isOn) {				   
+				   // just enumerate all realted nodes and update link color:
+                   var decendantNodes = [];
+				   decendantNodes.push(nodeId);
+				   var i = 0;
+				   while (i < (decendantNodes.length))
+				   {
+						var decendantNode = getDataNode(decendantNodes[i]);
+						//console.log(decendantNode);
+						decendantNode.data.toLinks.forEach(function(link){
+							var linkUI = graphics.getLinkUI(link.id);
+							if (linkUI) {
+								linkUI.attr('stroke', isOn ? '#cc3300' : currentTheme.linkColor)
+									.attr('stroke-width', isOn ? 4 : 3)
+							}
+							//highlightedUILinks.push(linkUI);
+							//decendantNodes.pop();
+						});
+						
+						decendantNode.data.toNodes.forEach(function (node){
+							if (decendantNodes.indexOf(node.id)< 0){decendantNodes.push(node.id);}
+						});
+						
+						i++;
+						//decendantNodes.concat(decendantNode.data.toNodes);
+				   }
+                },
+				
+				highlightAncestorNodes = function(nodeId, isOn) {				   
+                   var ancestorNodes = [];
+				   ancestorNodes.push(nodeId);
+				   var i = 0;
+				   while (i < (ancestorNodes.length))
+				   {
+						var ancestorNode = getDataNode(ancestorNodes[i]);
+						ancestorNode.data.fromLinks.forEach(function(link){
+							var linkUI = graphics.getLinkUI(link.id);
+							if (linkUI) {
+								linkUI.attr('stroke', isOn ? '#cc3300' : currentTheme.linkColor)
+									.attr('stroke-width', isOn ? 4 : 3)
+							}
+						});
+						ancestorNode.data.fromNodes.forEach(function (node){
+							if (ancestorNodes.indexOf(node.id)< 0){ancestorNodes.push(node.id);}
+						});
+						i++;
+				   }
+                },
+				
+				
 				//------------------------------------------------------------------------------------
 				highlightSelectedNode = function(nodeId) {
 				
@@ -902,8 +995,6 @@
 				   if (bRelate==true)
 				   {
 						if (nodeId != selectedNodeID){
-							//graph.addLink(selectedNodeID, nodeId);
-
 							Neo4j_CreateRelation(selectedNodeID, nodeId, 'TEST');
 						}
 						bRelate=false;
@@ -1068,10 +1159,13 @@
                 }),
 				
 				$(ui).hover(function() { // MOUSE HOVER
-                    highlightRelatedNodes(node.id, true);
-					
+                    if (viewOptions.highlightRelated){highlightRelatedNodes(node.id, true);}
+					if (viewOptions.highlightDecendants){highlightDecendantNodes(node.id, true);}
+					if (viewOptions.highlightAncestors){highlightAncestorNodes(node.id, true);}
                 }, function() { // mouse out
-                    highlightRelatedNodes(node.id, false);
+                    if (viewOptions.highlightRelated){highlightRelatedNodes(node.id, false);}
+					if (viewOptions.highlightDecendants){highlightDecendantNodes(node.id, false);}
+					if (viewOptions){highlightAncestorNodes(node.id, false);}
                 });
   
 				//ui.append(circlex);
@@ -1266,15 +1360,6 @@
 			font-family: Verdana;
 			font-weight: bold;
 		}
-				
-		 //canvas {
-		//	height: 100%;
-		//	width: 100%;
-		//	position: absolute;
-		//	overflow: hidden;
-		//	left: 0;
-		//	top: 0;
-		 // }  
 		  
 		  #labelPanel {
 			width:90%;
@@ -1311,6 +1396,16 @@
 		  .clearfix {
 			overflow: auto;
 		  }
+		  .panelheader {
+			margin:0px;
+			padding:0px;
+			font-size: 10px;
+			color: deepskyblue;
+			text-decoration: underline;
+			float:top;
+			letter-spacing: 1px;
+		  }
+
 		  #graphPanel {
 			float:left;
 			width:70%;
@@ -1328,9 +1423,94 @@
 		  .clearfix {
 			overflow: auto;
 		  }
+		  
+
+button {
+    background-color: #b3b3b3; 
+    color: black; 
+    //border: 2px solid #8c8c8c;
+	height: 20px;
+    border: none;
+    //padding: 16px 32px;
+    text-align: top;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 10px;
+    margin: 3px 1px;
+    -webkit-transition-duration: 0.4s; /* Safari */
+    transition-duration: 0.4s;
+    cursor: pointer;
+	border-radius: 3px;
 }
 
-		  
+button:hover {
+    background-color: #00a3cc; //#4CAF50;
+    color: white;
+}
+//button:focus {outline:0;}
+.fortext {
+	margin: 0px 5px;
+	height: 12px;
+	padding: 2px 2px 2px 2px;
+}
+/* Tooltip container */
+.tooltip {
+    position: relative;
+	outline:0;
+    display: inline-block;
+    //border-bottom: 1px dotted black; /* If you want dots under the hoverable text */
+}
+
+/* Tooltip text */
+.tooltip .tooltiptext {
+    visibility: hidden;
+    width: 120px;
+    background-color: #555;
+    color: #fff;
+    text-align: center;
+    padding: 5px 0;
+    border-radius: 6px;
+
+    /* Position the tooltip text */
+    position: absolute;
+    z-index: 1;
+    bottom: 125%;
+    left: 50%;
+    margin-left: -60px;
+
+    /* Fade in tooltip */
+    opacity: 0;
+    transition: opacity 1s;
+}
+
+/* Tooltip arrow */
+.tooltip .tooltiptext::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: #555 transparent transparent transparent;
+	
+}
+
+/* Show the tooltip text when you mouse over the tooltip container */
+.tooltip:hover .tooltiptext {
+    visibility: visible;
+    opacity: 1;
+}
+		
+#hovertext:hover {
+	font-size: 15px;
+    //color: red;
+	text-decoration: underline;
+}
+
+
+
+		
     </style>
 </head>
 
@@ -1362,20 +1542,18 @@
 	
 	</div>
 		<div id='toolPanel'>
-		<div>
-			<button onclick='Neo4j_InitAllNodes()'>Refresh All</button>
-			<button onclick='increaseNodeSize()'>+</button>
-			<button onclick='decreaseNodeSize()'>-</button>
-			<button onclick='unPinNode()'>^</button>
-			<button onclick='unPinAllNodes()'>^*</button>
+		<div> 
+			<div class="panelheader">Apply to All</div>
+			<button onclick='Neo4j_InitAllNodes()'>Get All</button>
+			<button onclick='unPinAllNodes()'>Unpin</button>
 		</div>
 	</div>
 
 	</div>
 		<div id='toolPanel'>
 		<div>
+			<div class="panelheader">Data</div>
 			<button onclick='GetNodesForSelected()'>Get Next</button>
-			<button onclick='Neo4j_InitAllNodes()'>Get All</button>
 		</div>
 	</div>
 	
@@ -1383,10 +1561,26 @@
 	</div>
 		<div id='toolPanel'>
 		<div>
-			<button onclick='fontDown()'>+Fv</button>
-			<button onclick='fontUp()'>-F^</button>
-			<button onclick='fontGrow()'>+F</button>
-			<button onclick='fontShrink()'>-F</button>
+			<div class="panelheader">Appearance</div>
+			<button class="tooltip">Node
+				<div class="tooltiptext">
+					<div id="hovertext" onclick='increaseNodeSize()'>Grow</div>
+					<div id="hovertext" onclick='decreaseNodeSize()'>Shrink</div>
+					<div id="hovertext" onclick='unPinNode()'>Unpin</div>
+					
+				</div>
+			</button>
+			
+			<button class="tooltip">Font
+				<div class="tooltiptext">
+						<div id="hovertext" onclick='fontGrow()'>Grow</div>
+						<div id="hovertext" onclick='fontShrink()'>Shrink</div>
+						<div id="hovertext" onclick='fontUp()'>Move Up</div>
+						<div id="hovertext" onclick='fontDown()'>Move Down</div>
+				</div>
+			</button>
+			
+			
 		</div>
 	</div>
 	
@@ -1397,26 +1591,28 @@
 		</div>
 	</div>
 	
-	<div id='toolPanel'>
-		<div id='connectDets'>		
-			Neo4j Username & Password:<br/> 
-			<button onclick='Neo4j_Connect()'>Connect</button>
-		</div>
-	</div>
-	
 	<div id='toolPanel'>		
-		Update selected entity:<br/> 
+		<div class="panelheader">Update selected entity:</div> 
 		<input id='log' value=''></input>
 		<button onclick='update()'>Update entity</button>
 	</div>
 
 	<div id='toolPanel'>
 		<div id='newNode'>
-		  Label: <input id="newNodeData" type="text" name="lname"><br>
+		  <div class="panelheader">Label:</div>
+		  <input id="newNodeData" type="text" name="lname"><br>
 		  <button onclick='createNode()'>Add new entity</button>
 		</div>
 	</div>
 	
+	<div id='toolPanel'>
+		<div id='newNode'>
+		  <div class="panelheader">View Options:</div>
+		  <input id="vo.hr" onclick="updateViewOptions()" type="checkbox" name="related" value="" checked="true"> Highlight related<br>
+		  <input id="vo.ha" onclick="updateViewOptions()" type="checkbox" name="ancestors" value=""> Highlight ancestors<br>
+		  <input id="vo.hd" onclick="updateViewOptions()" type="checkbox" name="decendants" value=""> Highlight Decendants<br>
+		</div>
+	</div>
 	
 
 
