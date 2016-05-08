@@ -13,6 +13,7 @@
 
 //==========Globals ==================================================================================================================================================================			
 		//const UI_SHADOW_INDEX = 0;
+		var UI_GLOW_INDEX = -1;
 		var UI_MAIN_INDEX = 0;
 		var UI_SELECTOR_INDEX = 1;
 		var UI_TEXT_INDEX = 2;
@@ -36,6 +37,7 @@
 	
 		//......Filter settings.............
 		var viewOptions = new viewOptionsType();
+		var interactionOptions = new interactionOptionsType();
 		
 		//......Display settings............
 		var THEMES = [];
@@ -77,7 +79,9 @@
 		themeX.entityLabelColor = '#e6e6e6';
 		themeX.opaque = true;
 		themeX.labelSizing = 'none';
-		currentTheme = THEMES[3];
+		
+		
+		currentTheme = THEMES[2];
 		
 		//Singletons...
 		var GRAPH = '';
@@ -146,7 +150,13 @@
 		{
 			this.highlightRelated = true;
 			this.highlightAncestors = false;
-			this.highlightDecendants = false;
+			this.highlightdescendants = false;
+			return this;
+		}
+		
+		function interactionOptionsType()
+		{
+			this.checkNodes = false;
 			return this;
 		}
 		
@@ -229,41 +239,52 @@
 			hideNeo4jConnect();
 		}
 		
+		
 		function addDataNode(nodeId, nodeData)
 		{
 			//if (GRAPH.getNode(nodeId))return;
 			var dataNode = getDataNode(nodeId);
 			if (!dataNode){
-				nodeData.labels.forEach(function(label, index){
-					if(!getNeoLabel(label)) {
-						var rgb = {r: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max)),
-								   g: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max)),
-								   b: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max))
-						}
-						var randomColor = rgb2hex(rgb.r, rgb.g, rgb.b);
-						var newLabel = new neoLabel(label, randomColor, rgb);
-						
-						labelsList.push(newLabel);
-						//addVisLabel(newLabel, labelsList.length-1);
-					}
-					
-					//Don't show hidden labels...
-					if (hiddenLabels.indexOf(label) < 0){
-						if (nodeData.displayLabel) {nodeData.displayLabel += ','}
-						nodeData.displayLabel = nodeData.displayLabel + label;
-					}
-				});
-				
-				//nodeData.displayLabel;
-				var aNeoLabel = getNeoLabel(nodeData.labels[0]);
-				if (aNeoLabel) {nodeData.nodeColor = aNeoLabel.color; nodeData.nodeColorRGB = aNeoLabel.colorRGB;}
-				dataNode = addNodeToGraph(nodeId,nodeData);
+				dataNode = addNodeToGraph(nodeId,nodeData);				
 				nodeList.push(dataNode);
-				
 			}
+			else
+			{
+				dataNode.data.labels = nodeData.labels;
+				dataNode.data.properties = nodeData.properties;
+			}
+			
+			dataNode.data.displayLabel = "";
+			dataNode.data.labels.forEach(function(label, index){
+				if(!getNeoLabel(label)) {
+					var rgb = {r: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max)),
+							   g: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max)),
+							   b: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max))
+					}
+					var randomColor = rgb2hex(rgb.r, rgb.g, rgb.b);
+					var newLabel = new neoLabel(label, randomColor, rgb);
+					
+					labelsList.push(newLabel);
+					//addVisLabel(newLabel, labelsList.length-1);
+				}
+				
+				//Don't show hidden labels...
+				if (hiddenLabels.indexOf(label) < 0){
+					if (dataNode.data.displayLabel) {dataNode.data.displayLabel += ','}
+					dataNode.data.displayLabel = dataNode.data.displayLabel + label;
+				}
+			});
+			//nodeData.displayLabel;
+			var aNeoLabel = getNeoLabel(dataNode.data.labels[0]);
+			if (aNeoLabel) {dataNode.data.nodeColor = aNeoLabel.color; dataNode.data.nodeColorRGB = aNeoLabel.colorRGB;}
+
+
 			//var newNodeUI = graphics.getNodeUI(nodeId);
 			//var textWidth = newNodeUI.children[2];
 			//newNodeUI.children[2].attr('x', -textWidth/2);
+			//
+			addNodeToGraph(dataNode.id,dataNode.data);
+			showNodeDetails(dataNode);
 			return dataNode;
 			
 		}
@@ -302,7 +323,12 @@
 		{
 			viewOptions.highlightRelated = document.getElementById('vo.hr').checked;
 			viewOptions.highlightAncestors = document.getElementById('vo.ha').checked;
-			viewOptions.highlightDecendants = document.getElementById('vo.hd').checked;
+			viewOptions.highlightdescendants = document.getElementById('vo.hd').checked;
+		}
+		
+		function updateInteractionOptions()
+		{
+			interactionOptions.checkNodes = document.getElementById('vo.ch').checked;
 		}
 		
 		function unPinAllNodes()
@@ -311,6 +337,111 @@
 				layout.pinNode(node, false);
 				node.data.isPinned = false;
 			});
+		}
+		
+		function getDataRootNodes()
+		{
+			var rootNodes = [];
+			nodeList.forEach(function(node){
+				if (node.data.fromNodes.length == 0)
+				{
+					rootNodes.push(node);
+				}
+			});
+			return rootNodes;
+		}
+		
+		
+		function arrangeBy(rootNode, processedNodeIds, maxxRight, maxxLeft, level, startY)
+		{
+			
+			if (!rootNode){
+				
+				var startPos = layout.getNodePosition(nodeList[0].id);
+				var rootNodes = getDataRootNodes();
+				processedNodeIds = [];
+				
+				nodeList.forEach(function(node){
+					layout.setNodePosition(node.id, startPos.x, startPos.y);
+				});
+			
+				maxxRight = startPos.x;
+				maxxLeft = startPos.x;
+				startY = startPos.y;
+				rootNodes.forEach(function(rootNode, index){
+					console.log(rootNode);
+					layout.setNodePosition(rootNode.id, maxxRight, startPos.y);
+					maxxRight = arrangeBy(rootNode, processedNodeIds, maxxRight,maxxLeft, 0, startY);
+					layout.setNodePosition(rootNode.id, maxxRight, startPos.y);
+				});
+			}
+			else{
+				
+				console.log('arranging child node: ' + rootNode.id + ' level: ' + level);
+				level++;
+				layout.pinNode(rootNode, true);
+				rootNode.data.isPinned = true;
+				processedNodeIds.push(rootNode.id);
+				var rootNodePos = layout.getNodePosition(rootNode.id);
+				var cb = rootNodePos.x - ((rootNode.data.toNodes.length*100) /2)
+				rootNode.data.toNodes.forEach(function(childNode, index){
+					console.log('parent pos: ' + rootNodePos.x + ":" + rootNodePos.y);
+					var childNodePos = layout.getNodePosition(childNode.id);
+					//console.log('child  pos: ' + childNodePos.x + ":" + childNodePos.y);
+					childNodePos.x = cb + (100 * index);
+					console.log('max bef   : ' + maxxRight);
+					if (childNodePos.x >= maxxRight) {maxxRight = childNodePos.x + 100;}
+					if (childNodePos.x <= maxxLeft) {maxxLeft = maxxLeft - 100; maxxRight = maxxRight + 100;}
+					console.log('max after : ' + maxxRight);
+					console.log('child  x  : ' + childNodePos.x);
+					console.log('child  pos: ' + childNodePos.x + ":" + childNodePos.y);
+					var childLevel = startY + (level * 150);
+					if (childLevel > childNodePos.y) {childNodePos.y = childLevel};
+					layout.setNodePosition(childNode.id, childNodePos.x, childNodePos.y);
+					
+					if (processedNodeIds.indexOf(childNode.id) < 0){
+						//console.log('arranging node' + childNode.id);
+						arrangeBy(childNode, processedNodeIds, maxxRight, maxxLeft, level, startY);
+					}
+				});
+			}
+			return maxxRight;
+			/*/------------------------------------------------------------------------------------
+			var startPos = layout.getNodePosition(nodeList[0].id);
+			var rootNodes = getDataRootNodes();
+			var allNodes = [];
+			var xpos = startPos.x;
+
+			rootNodes.forEach(function(node){
+				allNodes.push(node.id);
+			});
+
+			nodeList.forEach(function(node){
+				xpos = xpos + node.data.nodeSize * 2;
+				var currentNodePos = layout.getNodePosition(node.id);
+				layout.setNodePosition(node.id, xpos, startPos.y);
+				layout.pinNode(node, true);
+				node.data.isPinned = true;
+				node.data.maxlevel = 0;
+			});
+				
+			for (var i = 0; i< 2; i++)
+			{
+				nodeList.forEach(function(node){
+					node.data.toNodes.forEach(function(othernode, index){
+						if (othernode.data.maxlevel <= node.data.maxlevel){othernode.data.maxlevel = node.data.maxlevel+1}
+						var currentParentPos = layout.getNodePosition(othernode.id);
+						var currentNodePos = layout.getNodePosition(othernode.id);
+						//var newYPos = (currentParentPos<currentNodePos)?currentParentPos.y:currentNodePos.y + 100;
+						var newYPos = startPos.y + (othernode.data.maxlevel * 100);
+						//var newXPos = (currentParentPos.x + currentNodePos.y)/2;
+						layout.setNodePosition(othernode.id, currentNodePos.x, newYPos);
+					});
+				});
+			}
+
+			return;
+			*/
 		}
 		
 		function addNodeToGraph(nodeId, nodeData)
@@ -347,17 +478,25 @@
 				var nodeUI = graphics.getNodeUI(node.id);
 				nodeUI.children[UI_MAIN_INDEX].attr('stroke','transparent');
 			});
+			
 			checkedNodes = [];
 			nodeList.forEach(function(node){
 				var nodeUI = graphics.getNodeUI(node.id);
+				//node.data.toLinks.forEach(function(link){
+				//	var linkUI = graphics.getLinkUI(link);
+				//	linkUI.attr('stroke-opacity','0.1');
+				//});
+				
 				if (node.data.labels.indexOf(label.name) > -1){
+					nodeUI.children[UI_GLOW_INDEX].attr('fill-opacity','0.8');
 					nodeUI.children[UI_MAIN_INDEX].attr('fill-opacity','0.8');
 					nodeUI.children[UI_TEXT_INDEX].attr('fill-opacity','1');
 					checkedNodes.push(node);
 				}
 				else{
+					nodeUI.children[UI_GLOW_INDEX].attr('fill-opacity','0');
 					nodeUI.children[UI_MAIN_INDEX].attr('fill-opacity','0.2');
-					nodeUI.children[UI_TEXT_INDEX].attr('fill-opacity','0.3');
+					nodeUI.children[UI_TEXT_INDEX].attr('fill-opacity','0.1');
 				}
 					
 			});
@@ -410,27 +549,32 @@
 		
 		function Neo4j_Command(statements, successCallback, failCallback)
 		{
-			var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
-			//var body = '{"statements" : [ { "statement" : "MATCH (n) RETURN id(n),labels(n)"} ]}';
 			var body = new neo_APIcall(); 
 			statements.forEach(function(statement){
 				body.statements.push(new neo_Statement(statement));
 			});
-
+			
 			$.ajax({
 					url: neo4jServerURL + "/db/data/transaction/commit",
 					type: 'post',
-					data: body,//{//access_token: 'XXXXXXXXXXXXXXXXXXX'},
+					data: JSON.stringify(body),
 					headers: {
 						"Accept":'application/json; charset=UTF-8',
 						"Content-Type": 'application/json',
 						"Authorization": 'Basic ' + neo4jUserToken
 					},
-					dataType: 'json',
+					dataType: 'json',				
+					
 					success: function (returnbody){
-						if (successCallback){successCallback();}
+						if (successCallback){
+							successCallback(returnbody);
+						}
 					},
-					error: function (returnbody){if (failCallback){failCallback();}}()
+					error: function (returnbody){
+						if (failCallback){failCallback(returnbody);}
+					}()
+					
+					
 				});
 				
 		}
@@ -439,7 +583,7 @@
 		
 		function GetNodesForSelected()
 		{
-			Neo4j_GetNodesFor(selectedNodeID);
+			Neo4j_GetChildNodesFor(selectedNodeID);
 		}
 		
 		function Configuration(callback)
@@ -449,15 +593,20 @@
 				callback(jsonObject.Configuration);
 			});
 		}
-		function Neo4j_GetNodesFor(neo_nodeid)
+		function Neo4j_GetChildNodesFor(neo_nodeid)
 		{
-			var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
-			var body = '{"statements" : [ { "statement" : "MATCH (n)-[*1]->(m) where id(n) = '+ neo_nodeid +' RETURN id(n), id(m), labels(m), (m)"} ]}';
-	
+			var statements = [];
+			statements.push("MATCH (n)-[*1]->(m) where id(n) = "+ neo_nodeid +" RETURN id(n), id(m), labels(m), (m)");
+			var body = new neo_APIcall(); 
+			statements.forEach(function(statement){
+				body.statements.push(new neo_Statement(statement));
+			});
+			
+			
 			$.ajax({
 					url: neo4jServerURL + "/db/data/transaction/commit",
 					type: 'post',
-					data: body,//{//access_token: 'XXXXXXXXXXXXXXXXXXX'},
+					data: JSON.stringify(body),//{//access_token: 'XXXXXXXXXXXXXXXXXXX'},
 					headers: {
 						"Accept":'application/json; charset=UTF-8',
 						"Content-Type": 'application/json',
@@ -474,11 +623,10 @@
 								dat.id =row[1];
 								if (row[2]){dat.labels = row[2];}
 								if (row[3]){dat.properties = new neoPropertyList(row[3]);}
+								var node = addDataNode(row[1], dat);
 								if (!GRAPH.getNode(row[1])){
-									var node = addDataNode(row[1], dat);									
 									var pos = layout.getNodePosition(row[0]);
 									layout.setNodePosition(row[1], pos.x, pos.y);
-									
 								}
 								if (!getDataLink(row[0], row[1]))
 								{
@@ -492,18 +640,11 @@
 				});
 		}
 		
-		
-		
-		function Neo4j_GetNodesByLabel(byLabel)
+		function Neo4j_GetNodeById(neo_nodeid)
 		{
-			
-			var matchPattern = 'n';
-			if (byLabel) {matchPattern += ":" + byLabel;}
-			var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
+			//var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
 			var body = new neo_APIcall(); 
-			body.statements.push(new neo_Statement('MATCH ('+matchPattern+') RETURN id(n), labels(n), (n)'));
-
-	
+			body.statements.push(new neo_Statement('MATCH (n) WHERE ID(n) = '+neo_nodeid+'  RETURN id(n), labels(n), (n)'));
 			$.ajax({
 					url: neo4jServerURL + "/db/data/transaction/commit",
 					type: 'post',
@@ -523,17 +664,48 @@
 								dat.id =row[0];
 								if (row[1]){dat.labels = row[1];}
 								if (row[2]){dat.properties = new neoPropertyList(row[2]);}
-								if (!GRAPH.getNode(row[0])){
-									addDataNode(row[0], dat);
-								}
+								addDataNode(row[0], dat);
 							}
 						}
 						createLabelDiplay();
-						//Neo4j_InitAllRelations();
 					}
 				});
 		}
 		
+		function Neo4j_GetNodesByLabel(byLabel)
+		{
+			
+			var matchPattern = 'n';
+			if (byLabel) {matchPattern += ":" + byLabel;}
+			//var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
+			var body = new neo_APIcall(); 
+			body.statements.push(new neo_Statement('MATCH ('+matchPattern+') RETURN id(n), labels(n), (n)'));
+			$.ajax({
+					url: neo4jServerURL + "/db/data/transaction/commit",
+					type: 'post',
+					data: JSON.stringify(body),//{//access_token: 'XXXXXXXXXXXXXXXXXXX'},
+					headers: {
+						"Accept":'application/json; charset=UTF-8',
+						"Content-Type": 'application/json',
+						"Authorization": 'Basic ' + neo4jUserToken
+					},
+					dataType: 'json',
+					success: function (returnbody) {
+						for (var i = 0; i < returnbody.results.length; i++){
+							var result = returnbody.results[i];
+							for (var d = 0; d < result.data.length; d++){
+								var row = result.data[d].row;
+								var dat = new datax;
+								dat.id =row[0];
+								if (row[1]){dat.labels = row[1];}
+								if (row[2]){dat.properties = new neoPropertyList(row[2]);}
+								addDataNode(row[0], dat);
+							}
+						}
+						createLabelDiplay();
+					}
+				});
+		}
 		
 		function Neo4j_InitAllNodes(byLabel)
 		{
@@ -541,7 +713,7 @@
 			var matchPattern = 'n';
 			if (byLabel) {matchPattern += ":" + matchPattern;}
 		//var bodyStart = '{"statements" : [ { "statement" : "MATCH (n) RETURN id(n),labels(n)"} ]}';
-			var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
+			//var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
 			var body = new neo_APIcall(); 
 			body.statements.push(new neo_Statement('MATCH ('+matchPattern+') RETURN id(n), labels(n), (n)'));
 
@@ -565,9 +737,9 @@
 								dat.id =row[0];
 								if (row[2]){dat.properties = new neoPropertyList(row[2]);}
 								if (row[1]){dat.labels = row[1];}
-								if (!GRAPH.getNode(row[0])){
-									addDataNode(row[0], dat);
-								}
+								//if (!GRAPH.getNode(row[0])){
+								addDataNode(row[0], dat);
+								//}
 							}
 						}
 						createLabelDiplay();
@@ -581,7 +753,7 @@
 		function Neo4j_InitAllRelations()
 		{
 		
-			var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
+			//var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
 			var body = '{"statements" : [ { "statement" : "MATCH (n)-[*1]->(m) RETURN id(n), id(m)"} ]}';
 	
 			$.ajax({
@@ -614,7 +786,7 @@
 		
 		function Neo4j_CreateNode(labelName)
 		{
-			var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
+			//var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
 			var body = '{"statements" : [ { "statement" : "CREATE (n:' + labelName + ') RETURN id(n)"} ]}';
 	
 			$.ajax({
@@ -636,9 +808,9 @@
 								var dat = new datax;
 								dat.id = row[0];
 								if (labelName) {dat.labels.push(labelName);}
-								if (!GRAPH.getNode(row[0])){
-									addDataNode(row[0],dat);
-								}
+								//if (!GRAPH.getNode(row[0])){
+								addDataNode(row[0],dat);
+								//}
 							}
 						}					
 					}
@@ -647,7 +819,7 @@
 
 		function Neo4j_DeleteNode(NodeID)
 		{
-			var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
+			//var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
 			var body = '{"statements" : [ { "statement" : "MATCH (n) where ID(n) = '+ NodeID +' DETACH DELETE (n) RETURN ID(n)"} ]}';
 	
 			$.ajax({
@@ -682,7 +854,7 @@
 		function Neo4j_CreateRelation(NodeID1, NodeID2, Relation)
 		{
 		
-			var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
+			//var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
 			var body = '{"statements" : [ { "statement" : "';
 			body += ' match (n) where ID(n) = ' + NodeID1;
 			body += ' match (m) where ID(m) = ' + NodeID2;
@@ -763,13 +935,20 @@
 			Neo4j_DeleteNode(selectedNodeID);
 		}
 		
-		function update(){
+		function refreshNodeAppearance(){
 			var node = GRAPH.getNode(selectedNodeID);
-			var processingElement = document.getElementById('log');
-			node.data.labels.push(processingElement.value);
 			addNodeToGraph(selectedNodeID,node.data);
 		}
 		
+		function Neo4jRowReturn(returnbody, callback) {
+			for (var r = 0; r < returnbody.results.length; r++){
+				var result = returnbody.results[r];
+				for (var c = 0; c < result.data.length; c++){
+					callback(result.data[c].row);
+				}
+			}
+		}
+					
 		function relateSelectedToNode(){
 			bRelate = true;
 		}
@@ -840,23 +1019,28 @@
 			var heightOfNode = Number(nodeUI.children[UI_MAIN_INDEX].getBBox().height);
 			nodeUI.children[UI_TEXT_INDEX].attr('y', heightOfNode/3);
 		}
+		
 		function deleteLabel(nodeId, labelName)
 		{
 			var command = "MATCH (n) where ID(n) = " + nodeId + " REMOVE n:" + labelName;
-			Neo4j_Command([command], update);
+			var callback = function(){Neo4j_GetNodeById(selectedNodeID)};
+			Neo4j_Command([command], callback, callback);
 		}	
+
+		function addLabel()
+		{
+			var processingElement = document.getElementById('log');
+			//node.data.labels.push(processingElement.value);
+			if(!processingElement) return;
+			if(!processingElement.value) return;
+			var command = "MATCH (n) where ID(n) = " + selectedNodeID + " SET n:" + processingElement.value;
+			var callback = function(){Neo4j_GetNodeById(selectedNodeID)};
+			Neo4j_Command([command], callback, callback);
+			
+		}
 		
 		function showNodeDetails(node)
 		{
-		    //// As in previous steps, we create a basic structure of a graph:
-			//var processingElement = document.getElementById('selectedNode');
-			//updateOutput();
-			//function updateOutput(callback) {
-			//	processingElement.innerHTML='Selected node ID: ' + selectedNodeID + '<br/>Labels: ' + selectedNodeData.labels;			  
-			//	setTimeout(function () {
-			//		updateOutput(callback);
-			//	}, 0); // keep going in next even cycle
-			//}
 			var processingElement = document.getElementById('selectedNode');
 			var labellist = ''
 			node.data.labels.forEach(function(label, index){
@@ -934,31 +1118,30 @@
                    });
                 },
 				//------------------------------------------------------------------------------------
-				highlightDecendantNodes = function(nodeId, isOn) {				   
+				highlightdescendantNodes = function(nodeId, isOn) {				   
 				   // just enumerate all realted nodes and update link color:
-                   var decendantNodes = [];
-				   decendantNodes.push(nodeId);
+                   var descendantNodes = [];
+				   descendantNodes.push(nodeId);
 				   var i = 0;
-				   while (i < (decendantNodes.length))
+				   while (i < (descendantNodes.length))
 				   {
-						var decendantNode = getDataNode(decendantNodes[i]);
-						//console.log(decendantNode);
-						decendantNode.data.toLinks.forEach(function(link){
+						var descendantNode = getDataNode(descendantNodes[i]);
+						descendantNode.data.toLinks.forEach(function(link){
 							var linkUI = graphics.getLinkUI(link.id);
 							if (linkUI) {
 								linkUI.attr('stroke', isOn ? '#cc3300' : currentTheme.linkColor)
 									.attr('stroke-width', isOn ? 4 : 3)
 							}
 							//highlightedUILinks.push(linkUI);
-							//decendantNodes.pop();
+							//descendantNodes.pop();
 						});
 						
-						decendantNode.data.toNodes.forEach(function (node){
-							if (decendantNodes.indexOf(node.id)< 0){decendantNodes.push(node.id);}
+						descendantNode.data.toNodes.forEach(function (node){
+							if (descendantNodes.indexOf(node.id)< 0){descendantNodes.push(node.id);}
 						});
 						
 						i++;
-						//decendantNodes.concat(decendantNode.data.toNodes);
+						//descendantNodes.concat(descendantNode.data.toNodes);
 				   }
                 },
 				
@@ -1000,8 +1183,19 @@
 						bRelate=false;
 				   }
 				   
-				   
 				   nodeUI = graphics.getNodeUI(nodeId);
+				   
+				   if (interactionOptions.checkNodes){
+					checkedNodes.push(nodeId);
+					nodeUI.children[UI_MAIN_INDEX].attr('stroke','yellow');
+				   }
+				   else{
+					checkedNodes.forEach(function(nodeId){
+						var checkednodeUI = graphics.getNodeUI(nodeId);
+						checkednodeUI.children[UI_MAIN_INDEX].attr('stroke','transparent');
+					});
+				   }
+				   
 				   nodeUI.children[UI_SELECTOR_INDEX].attr('stroke','red');
 				   var node = graph.getNode(nodeId);
 				   showNodeDetails(node);
@@ -1145,7 +1339,6 @@
                 $(ui).click(function() { // MOUSE CLICK
                     highlightSelectedNode(node.id);
 					layout.pinNode(node, true);
-					//selectedNodeUI.children[UI_MAIN_INDEX].attr('filter',''); //it works, just doesn't contribute to the look & feel.
 					node.data.isPinned = true;
 					
                 }),
@@ -1160,11 +1353,11 @@
 				
 				$(ui).hover(function() { // MOUSE HOVER
                     if (viewOptions.highlightRelated){highlightRelatedNodes(node.id, true);}
-					if (viewOptions.highlightDecendants){highlightDecendantNodes(node.id, true);}
+					if (viewOptions.highlightdescendants){highlightdescendantNodes(node.id, true);}
 					if (viewOptions.highlightAncestors){highlightAncestorNodes(node.id, true);}
                 }, function() { // mouse out
                     if (viewOptions.highlightRelated){highlightRelatedNodes(node.id, false);}
-					if (viewOptions.highlightDecendants){highlightDecendantNodes(node.id, false);}
+					if (viewOptions.highlightdescendants){highlightdescendantNodes(node.id, false);}
 					if (viewOptions){highlightAncestorNodes(node.id, false);}
                 });
   
@@ -1182,11 +1375,12 @@
 				visDefs += '</defs>'; 
 				ui.innerHTML = visDefs;
 				
+				UI_GLOW_INDEX = 0;
 				UI_MAIN_INDEX = 1;
 				UI_SELECTOR_INDEX = 2;
 				UI_TEXT_INDEX = 3;
 				
-				if (currentTheme.glow){ui.append(circleGlow); UI_MAIN_INDEX++; UI_SELECTOR_INDEX++; UI_TEXT_INDEX++;}
+				if (currentTheme.glow){ui.append(circleGlow); UI_GLOW_INDEX++; UI_MAIN_INDEX++; UI_SELECTOR_INDEX++; UI_TEXT_INDEX++;}
 				ui.append(circlex);
 				ui.append(uiSelected);
 				ui.append(svgText_Data);
@@ -1543,9 +1737,10 @@ button:hover {
 	</div>
 		<div id='toolPanel'>
 		<div> 
-			<div class="panelheader">Apply to All</div>
+			<div class="panelheader">Bulk</div>
 			<button onclick='Neo4j_InitAllNodes()'>Get All</button>
-			<button onclick='unPinAllNodes()'>Unpin</button>
+			<button onclick='unPinAllNodes()'>Unpin All</button>
+			<button onclick='arrangeBy()'>Arrange</button>
 		</div>
 	</div>
 
@@ -1566,8 +1761,8 @@ button:hover {
 				<div class="tooltiptext">
 					<div id="hovertext" onclick='increaseNodeSize()'>Grow</div>
 					<div id="hovertext" onclick='decreaseNodeSize()'>Shrink</div>
-					<div id="hovertext" onclick='unPinNode()'>Unpin</div>
-					
+					<div id="hovertext" onclick='unPinNode()'>Unpin</div>	
+					<div id="hovertext" onclick='refreshNodeAppearance()'>Refresh Visual</div>
 				</div>
 			</button>
 			
@@ -1594,7 +1789,7 @@ button:hover {
 	<div id='toolPanel'>		
 		<div class="panelheader">Update selected entity:</div> 
 		<input id='log' value=''></input>
-		<button onclick='update()'>Update entity</button>
+		<button onclick='addLabel()'>Add Label</button>
 	</div>
 
 	<div id='toolPanel'>
@@ -1608,14 +1803,18 @@ button:hover {
 	<div id='toolPanel'>
 		<div id='newNode'>
 		  <div class="panelheader">View Options:</div>
-		  <input id="vo.hr" onclick="updateViewOptions()" type="checkbox" name="related" value="" checked="true"> Highlight related<br>
-		  <input id="vo.ha" onclick="updateViewOptions()" type="checkbox" name="ancestors" value=""> Highlight ancestors<br>
-		  <input id="vo.hd" onclick="updateViewOptions()" type="checkbox" name="decendants" value=""> Highlight Decendants<br>
+		  <input id="vo.hr" onclick="updateViewOptions()" type="checkbox" name="related" value="" checked="true"> Highlight Related<br>
+		  <input id="vo.ha" onclick="updateViewOptions()" type="checkbox" name="ancestors" value=""> Highlight Ancestors<br>
+		  <input id="vo.hd" onclick="updateViewOptions()" type="checkbox" name="descendants" value=""> Highlight Descendants<br>
 		</div>
 	</div>
 	
-
-
+	<div id='toolPanel'>
+		<div id='newNode'>
+		  <div class="panelheader">Selection Options:</div>
+		  <input id="vo.ch" onclick="updateInteractionOptions()" type="checkbox" name="descendants" value=""> Multi Select<br>
+		</div>
+	</div>
 	
 
 
