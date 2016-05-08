@@ -1027,6 +1027,34 @@
 			Neo4j_Command([command], callback, callback);
 		}	
 
+		function addProperty(nodeId)
+		{
+			if (!nodeId) {nodeId=selectedNodeID}
+			var elePropKey = document.getElementById('add.property.key').value;
+			var elePropVal = document.getElementById('add.property.value').value;
+			var elePropType = document.getElementById('add.property.type').value;
+			if (!elePropType) {elePropType ="string";}
+			if (elePropType == "string"){elePropVal = '"' + elePropVal + '"'}
+			var command = "MATCH (n) where ID(n) = " + nodeId + " SET n +={" + elePropKey + ":" + elePropVal + "}";
+			
+			var callback = function(){Neo4j_GetNodeById(selectedNodeID)};
+			Neo4j_Command([command], callback, callback);
+		}
+		
+		function addPropertyToChecked()
+		{
+			checkedNodes.forEach(function(node){
+				addProperty(node.id);
+			});
+		}
+		
+		function addPropertyToAll()
+		{
+			nodeList.forEach(function(node){
+				addProperty(node.id);
+			});
+		}
+		
 		function addLabel()
 		{
 			var processingElement = document.getElementById('log');
@@ -1036,7 +1064,6 @@
 			var command = "MATCH (n) where ID(n) = " + selectedNodeID + " SET n:" + processingElement.value;
 			var callback = function(){Neo4j_GetNodeById(selectedNodeID)};
 			Neo4j_Command([command], callback, callback);
-			
 		}
 		
 		function showNodeDetails(node)
@@ -1184,20 +1211,21 @@
 				   }
 				   
 				   nodeUI = graphics.getNodeUI(nodeId);
+				   var node = graph.getNode(nodeId);
 				   
 				   if (interactionOptions.checkNodes){
-					checkedNodes.push(nodeId);
+					checkedNodes.push(node);
 					nodeUI.children[UI_MAIN_INDEX].attr('stroke','yellow');
 				   }
 				   else{
-					checkedNodes.forEach(function(nodeId){
-						var checkednodeUI = graphics.getNodeUI(nodeId);
+					checkedNodes.forEach(function(nodex){
+						var checkednodeUI = graphics.getNodeUI(nodex.id);
 						checkednodeUI.children[UI_MAIN_INDEX].attr('stroke','transparent');
 					});
 				   }
 				   
 				   nodeUI.children[UI_SELECTOR_INDEX].attr('stroke','red');
-				   var node = graph.getNode(nodeId);
+				   
 				   showNodeDetails(node);
 				   selectedNodeID = nodeId;
 				   selectedNodeData = node.data;
@@ -1600,9 +1628,19 @@
 			letter-spacing: 1px;
 		  }
 
+		  #leftColumn {
+			float:left;
+			width:250px;
+			margin:0px;
+			padding:0px;
+			border-style:solid;
+			border-width:0px;
+			overflow: none;
+		  }
+		  
 		  #graphPanel {
 			float:left;
-			width:70%;
+			width:60%;
 			height:80%;
 			margin-top:5px;
 			margin-left:10px;
@@ -1690,6 +1728,23 @@ button:hover {
 	
 }
 
+input {
+	width:100px;
+	height:10px;
+	margin:2px;
+	border-radius: 6px;
+	background-color: #b3ffff;
+	border-color: transparent;
+}.check{width:10px;}
+select {
+	width:100px;
+	height:18px;
+	margin:2px;
+	border-radius: 6px;
+	background-color: #b3ffff;
+	border-color: transparent;
+}
+
 /* Show the tooltip text when you mouse over the tooltip container */
 .tooltip:hover .tooltiptext {
     visibility: visible;
@@ -1713,9 +1768,26 @@ button:hover {
 	<!--canvas id="myCanvas" width="200" height="100" style="border:5px solid #000000;" fill="#3a3a3a">
 	</canvas-->
 
+	<div id='leftColumn' style='height:100%; width:220px; overflow:auto;'>
+		<div id='toolPanel' style='overflow:auto;'>
+			<span id="availableLabels" class="label"></span>
+		</div>
+		
+		<div id='toolPanel'>
+			<div id='newNode'>
+			  <div class="panelheader">View Options:</div>
+			  <input class="check" id="vo.hr" onclick="updateViewOptions()" type="checkbox" name="related" value="" checked="true"> Highlight Related<br>
+			  <input class="check" id="vo.ha" onclick="updateViewOptions()" type="checkbox" name="ancestors" value=""> Highlight Ancestors<br>
+			  <input class="check" id="vo.hd" onclick="updateViewOptions()" type="checkbox" name="descendants" value=""> Highlight Descendants<br>
+			</div>
+		</div>
 	
-	<div id='toolPanel' style='height:80%; overflow:auto;'>
-		<span id="availableLabels" class="label"></span>
+		<div id='toolPanel'>
+			<div id='newNode'>
+			  <div class="panelheader">Selection Options:</div>
+			  <input class="check" id="vo.ch" onclick="updateInteractionOptions()" type="checkbox" name="descendants" value=""> Multi Select<br>
+			</div>
+		</div>
 	</div>
 	
 	<div id='graphPanel'>
@@ -1791,7 +1863,22 @@ button:hover {
 		<input id='log' value=''></input>
 		<button onclick='addLabel()'>Add Label</button>
 	</div>
-
+	
+	<div id='toolPanel'>		
+		<div class="panelheader">Add/Update Property:</div> 
+		Name: <input id='add.property.key' value=''></input><br>
+		Value: <input id='add.property.value' value=''></input><br>
+		Type:
+		<select id='add.property.type'>
+		  <option value="string">Text</option>
+		  <option value="number">Number</option>
+		  <option value="bool">True/False</option>
+		</select>
+		<button onclick='addProperty()'>Selected</button>
+		<button onclick='addPropertyToChecked()'>Highlighted</button>
+		<button onclick='addPropertyToAll()'>All</button>
+	</div>
+	
 	<div id='toolPanel'>
 		<div id='newNode'>
 		  <div class="panelheader">Label:</div>
@@ -1800,21 +1887,7 @@ button:hover {
 		</div>
 	</div>
 	
-	<div id='toolPanel'>
-		<div id='newNode'>
-		  <div class="panelheader">View Options:</div>
-		  <input id="vo.hr" onclick="updateViewOptions()" type="checkbox" name="related" value="" checked="true"> Highlight Related<br>
-		  <input id="vo.ha" onclick="updateViewOptions()" type="checkbox" name="ancestors" value=""> Highlight Ancestors<br>
-		  <input id="vo.hd" onclick="updateViewOptions()" type="checkbox" name="descendants" value=""> Highlight Descendants<br>
-		</div>
-	</div>
-	
-	<div id='toolPanel'>
-		<div id='newNode'>
-		  <div class="panelheader">Selection Options:</div>
-		  <input id="vo.ch" onclick="updateInteractionOptions()" type="checkbox" name="descendants" value=""> Multi Select<br>
-		</div>
-	</div>
+
 	
 
 
