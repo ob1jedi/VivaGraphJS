@@ -1076,11 +1076,11 @@
 				labellist += '<a>' + label + '<button class="fortext tooltip" onclick="'+button_onclick+'" >X<div class="tooltiptext">delete label</div></button></a>'
 				
 			});
-			var html = '<a style="text-decoration: underline; font-weight: bold;">Selected entity ID<a>: ' + selectedNodeID;
-			html += '<br/><a style="text-decoration: underline; font-weight: bold;">Entity type<a>:<br/>' + labellist;
+			var html = '<a class="panelheader">Selected entity ID:</a> ' + selectedNodeID;
+			html += '<br/><a class="panelheader">Entity type<a>:<br/>' + labellist;
 			processingElement.innerHTML = html;
 			
-			html = '<a style="text-decoration: underline; font-weight: bold;">Properties<a>:';
+			html = '<a class="panelheader">Properties<a>:';
 			var processingElement = document.getElementById('nodeDetails');
 			node.data.properties.forEach(function(property, index){
 				html += '<br/>  ' + property.key + ': ' + property.value;
@@ -1226,13 +1226,13 @@
 				   
 				   nodeUI.children[UI_SELECTOR_INDEX].attr('stroke','red');
 				   
-				   showNodeDetails(node);
+				   
 				   selectedNodeID = nodeId;
 				   selectedNodeData = node.data;
 				   selectedNode = node;
 				   selectedNodeUI = nodeUI;
 				   //node.addMass = -10;
-				   
+				   showNodeDetails(node);
 				   //fetchInfo(nodeId);
 				   
                 };
@@ -1569,18 +1569,14 @@
 		svg, #graphContainer, #schemaContainer { 
 			width: 100%; 
 			height: 100%; 
-			//background-color: #3a3a3a;
 			margin: 0px;
 			float:left;
 		}
 		.label {
-			//position: absolute;
-			top: 10px;
-			color: white;
 			font-size: 12px;
-			left: 10px;
 			font-family: Verdana;
 			font-weight: bold;
+			cursor:pointer;
 		}
 		  
 		  #labelPanel {
@@ -1593,16 +1589,15 @@
 			border-color:#4d4d4d;
 			color: #1a1a1a;
 			background-color: #4d4d4d;
+			background-opacity: 0.5;
 			border-radius:15px;
 			text-align: center;
-			
 		  }
 		  .clearfix {
 			overflow: auto;
 		  }
 		  
 		  #toolPanel {
-			float:left;
 			width:200px;
 			margin:5px;
 			margin-left:5px;
@@ -1613,13 +1608,22 @@
 			color: deepskyblue;
 			background-color:#1a1a1a;
 			border-radius:10px;
-			
+			background-opacity:0.8;
+			font-family:"Palatino Linotype", "Book Antiqua", Palatino, serif;
+			//font-family: Arial, Helvetica, sans-serif;
+			//font-family: Verdana;
+			//font-family:"Arial Black", Gadget, sans-serif;
+			font-size: 12px;
+			//font-weight: bold;
+			//font-family:"Lucida Console", Monaco, monospace;
+			letter-spacing: 0px;
 		  }
 		  .clearfix {
 			overflow: auto;
 		  }
 		  .panelheader {
 			margin:0px;
+			margin-bottom:5px;
 			padding:0px;
 			font-size: 10px;
 			color: deepskyblue;
@@ -1629,41 +1633,44 @@
 		  }
 
 		  #leftColumn {
-			float:left;
-			width:250px;
+			left:10px;
+			width:230px;
 			margin:0px;
 			padding:0px;
-			border-style:solid;
 			border-width:0px;
-			overflow: none;
+			overflow: auto;
+			position: fixed;
+		  }
+		  
+		  #rightColumn {
+			right:0px;
+			width:230px;
+			margin:0px;
+			padding:0px;
+			border-width:0px;
+			overflow: hidden;
+			position: fixed;
 		  }
 		  
 		  #graphPanel {
-			float:left;
-			width:60%;
-			height:80%;
-			margin-top:5px;
-			margin-left:10px;
-			padding:5px;
-			border-style:solid;
-			border-width:2px;
-			border-color:#0d0d0d;
-			color: deepskyblue;
+			top:0px;
+			left:0px;
+			width:100%;
+			height:100%;
+			margin:0px;
+			padding:0px;
+			border-width:0px;
 			background-color: #1a1a1a;
-			border-radius:10px;
+			position: fixed;
 		  }
 		  .clearfix {
-			overflow: auto;
+			overflow: none;
 		  }
-		  
-
 button {
     background-color: #b3b3b3; 
     color: black; 
-    //border: 2px solid #8c8c8c;
 	height: 20px;
     border: none;
-    //padding: 16px 32px;
     text-align: top;
     text-decoration: none;
     display: inline-block;
@@ -1679,20 +1686,18 @@ button:hover {
     background-color: #00a3cc; //#4CAF50;
     color: white;
 }
-//button:focus {outline:0;}
 .fortext {
 	margin: 0px 5px;
 	height: 12px;
 	padding: 2px 2px 2px 2px;
 }
+
 /* Tooltip container */
 .tooltip {
     position: relative;
 	outline:0;
     display: inline-block;
-    //border-bottom: 1px dotted black; /* If you want dots under the hoverable text */
 }
-
 /* Tooltip text */
 .tooltip .tooltiptext {
     visibility: hidden;
@@ -1718,7 +1723,7 @@ button:hover {
 /* Tooltip arrow */
 .tooltip .tooltiptext::after {
     content: "";
-    position: absolute;
+    position: relative;
     top: 100%;
     left: 50%;
     margin-left: -5px;
@@ -1727,10 +1732,65 @@ button:hover {
     border-color: #555 transparent transparent transparent;
 	
 }
+/* Show the tooltip text when you mouse over the tooltip container */
+.tooltip:hover .tooltiptext {
+    visibility: visible;
+    opacity: 1;
+}
+
+
+
+/* popup container */
+.popup {
+    position: relative;
+	outline:0;
+    display: inline-block;
+}
+/* popup text */
+.popup .popuptext {
+    visibility: hidden;
+    width: 120px;
+    background-color: #555;
+    color: #fff;
+	font-size:15px;
+    text-align: left;
+	list-style-type: circle;
+    padding: 5px;
+    border-radius: 6px;
+
+    /* Position the popup text */
+    position: absolute;
+    z-index: 0;
+    bottom: 100%;
+    left: 50%;
+    margin-left: -20px;
+	
+    /* Fade in popup */
+    opacity: 0;
+    transition: opacity 1s;
+}
+
+/* popup arrow */
+.popup .popuptext::after {
+    content: "-";
+	
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: 5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: #555 transparent transparent transparent;	
+}
+/* Show the popup text when you mouse over the popup container */
+.popup:hover .popuptext {
+    visibility: visible;
+    opacity: 1;
+}
 
 input {
 	width:100px;
-	height:10px;
+	height:12px;
 	margin:2px;
 	border-radius: 6px;
 	background-color: #b3ffff;
@@ -1744,18 +1804,11 @@ select {
 	background-color: #b3ffff;
 	border-color: transparent;
 }
-
-/* Show the tooltip text when you mouse over the tooltip container */
-.tooltip:hover .tooltiptext {
-    visibility: visible;
-    opacity: 1;
-}
-		
 #hovertext:hover {
 	font-size: 15px;
-    //color: red;
 	text-decoration: underline;
 }
+
 
 
 
@@ -1768,7 +1821,11 @@ select {
 	<!--canvas id="myCanvas" width="200" height="100" style="border:5px solid #000000;" fill="#3a3a3a">
 	</canvas-->
 
-	<div id='leftColumn' style='height:100%; width:220px; overflow:auto;'>
+	<div id='graphPanel'>
+		<div id='graphContainer'></div>
+	</div>
+	
+	<div id='leftColumn'>
 		<div id='toolPanel' style='overflow:auto;'>
 			<span id="availableLabels" class="label"></span>
 		</div>
@@ -1790,47 +1847,78 @@ select {
 		</div>
 	</div>
 	
-	<div id='graphPanel'>
-		<div id='graphContainer'></div>
-	</div>
 	
-	<!--div id='graphPanel'>
-		<div id='schemaContainer'></div>
-	</div-->
-
-	<div id='toolPanel'>
-		<div id='selectedNode'></div>
-	</div>
-	<div id='toolPanel'>
-		<div id='nodeDetails'>
-		</div>
-	</div>
+	<div id='rightColumn'>
 	
-	</div>
 		<div id='toolPanel'>
-		<div> 
-			<div class="panelheader">Bulk</div>
-			<button onclick='Neo4j_InitAllNodes()'>Get All</button>
-			<button onclick='unPinAllNodes()'>Unpin All</button>
-			<button onclick='arrangeBy()'>Arrange</button>
+			<div id='selectedNode'></div>
 		</div>
-	</div>
+		
+		<div id='toolPanel'>
+			<div id='nodeDetails'>
+			</div>
+		</div>
+		
+		<div id='toolPanel'>
+			<div id='newNode'>
+			  <div class="panelheader">New entity:</div>
+			  <input id="newNodeData" type="text" name="lname">
+			  <button onclick='createNode()'>Add Entity</button>
+			</div>
+		</div>
+		<div id='toolPanel'>		
+			<div class="panelheader">Update selected entity:</div> 
+			<input id='log' value=''></input>
+			<button onclick='addLabel()'>Add Label</button>
+		</div>
+		
+		<div id='toolPanel'>		
 
-	</div>
-		<div id='toolPanel'>
-		<div>
-			<div class="panelheader">Data</div>
-			<button onclick='GetNodesForSelected()'>Get Next</button>
+			<div class="panelheader">Add/Update Property:</div> 
+			<table>
+			<tr>
+				<td>name:</td> <td> <input id='add.property.key' value=''></input></td>
+			</tr>
+			<tr>
+				<td>value:</td><td><input id='add.property.value' value=''></input></td>
+			</tr>
+			<tr>
+				<td>type:</td>
+				<td>
+					<select id='add.property.type'>
+					  <option value="string">Text</option>
+					  <option value="number">Number</option>
+					  <option value="bool">True/False</option>
+					</select>
+				</td>
+			</tr>
+			</table>
+			<button onclick='addProperty()'>Selected</button>
+			<button onclick='addPropertyToChecked()'>Highlighted</button>
+			<button onclick='addPropertyToAll()'>All</button>
 		</div>
-	</div>
+		
+		<div id='toolPanel'>
+			<div>
+				<button onclick='relateSelectedToNode()'>Relate entity</button>
+				<button onclick='deleteNode()'>Delete entity</button>
+			</div>
+		</div>
+		
+		<div id='toolPanel'>
+			<div> 
+				<div class="panelheader">Bulk</div>
+				<button onclick='Neo4j_InitAllNodes()'>Get All</button>
+				<button onclick='unPinAllNodes()'>Unpin All</button>
+				<button onclick='arrangeBy()'>Arrange</button>
+			</div>
+		</div>
 	
 
-	</div>
 		<div id='toolPanel'>
-		<div>
 			<div class="panelheader">Appearance</div>
-			<button class="tooltip">Node
-				<div class="tooltiptext">
+			<button class="popup">Node
+				<div class="popuptext">
 					<div id="hovertext" onclick='increaseNodeSize()'>Grow</div>
 					<div id="hovertext" onclick='decreaseNodeSize()'>Shrink</div>
 					<div id="hovertext" onclick='unPinNode()'>Unpin</div>	
@@ -1838,56 +1926,27 @@ select {
 				</div>
 			</button>
 			
-			<button class="tooltip">Font
-				<div class="tooltiptext">
+			<button class="popup">Font
+				<div class="popuptext">
 						<div id="hovertext" onclick='fontGrow()'>Grow</div>
 						<div id="hovertext" onclick='fontShrink()'>Shrink</div>
 						<div id="hovertext" onclick='fontUp()'>Move Up</div>
 						<div id="hovertext" onclick='fontDown()'>Move Down</div>
 				</div>
 			</button>
-			
-			
+			<div class="panelheader">Data</div>
+			<button onclick='GetNodesForSelected()'>Get Next</button>
 		</div>
-	</div>
-	
-	<div id='toolPanel'>
-		<div>
-			<button onclick='relateSelectedToNode()'>Relate entity</button>
-			<button onclick='deleteNode()'>Delete entity</button>
-		</div>
-	</div>
-	
-	<div id='toolPanel'>		
-		<div class="panelheader">Update selected entity:</div> 
-		<input id='log' value=''></input>
-		<button onclick='addLabel()'>Add Label</button>
-	</div>
-	
-	<div id='toolPanel'>		
-		<div class="panelheader">Add/Update Property:</div> 
-		Name: <input id='add.property.key' value=''></input><br>
-		Value: <input id='add.property.value' value=''></input><br>
-		Type:
-		<select id='add.property.type'>
-		  <option value="string">Text</option>
-		  <option value="number">Number</option>
-		  <option value="bool">True/False</option>
-		</select>
-		<button onclick='addProperty()'>Selected</button>
-		<button onclick='addPropertyToChecked()'>Highlighted</button>
-		<button onclick='addPropertyToAll()'>All</button>
-	</div>
-	
-	<div id='toolPanel'>
-		<div id='newNode'>
-		  <div class="panelheader">Label:</div>
-		  <input id="newNodeData" type="text" name="lname"><br>
-		  <button onclick='createNode()'>Add new entity</button>
-		</div>
-	</div>
-	
+		
 
+		
+
+		
+
+		
+
+	
+	</div>
 	
 
 
