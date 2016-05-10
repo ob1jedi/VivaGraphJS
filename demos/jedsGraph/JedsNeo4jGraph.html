@@ -356,31 +356,35 @@
 		{
 			
 			if (!rootNode){
-				
+				squares = [];
 				var startPos = layout.getNodePosition(nodeList[0].id);
 				var rootNodes = getDataRootNodes();
 				processedNodeIds = [];
 				
+				var startpos = startPos.x;
 				nodeList.forEach(function(node){
-					layout.setNodePosition(node.id, startPos.x, startPos.y);
+					layout.pinNode(node, true);
+					node.data.isPinned = true;
+					startpos += 100;
+					layout.setNodePosition(node.id, startpos, startPos.y);
 				});
 			
 				maxxRight = startPos.x;
 				maxxLeft = startPos.x;
 				startY = startPos.y;
 				rootNodes.forEach(function(rootNode, index){
-					console.log(rootNode);
-					layout.setNodePosition(rootNode.id, maxxRight, startPos.y);
-					maxxRight = arrangeBy(rootNode, processedNodeIds, maxxRight,maxxLeft, 0, startY);
-					layout.setNodePosition(rootNode.id, maxxRight, startPos.y);
+					//console.log(rootNode);
+					//layout.setNodePosition(rootNode.id, maxxRight, startPos.y);
+					//processedNodeIds.push(rootNode.id);
+					maxxRight = arrangeBy(rootNode, processedNodeIds, maxxRight, maxxLeft, 0, startY);
+					//layout.setNodePosition(rootNode.id, maxxRight, startPos.y);
 				});
 			}
 			else{
 				
 				//console.log('arranging child node: ' + rootNode.id + ' level: ' + level);
 				level++;
-				layout.pinNode(rootNode, true);
-				rootNode.data.isPinned = true;
+				//layout.pinNode(rootNode, true);
 				processedNodeIds.push(rootNode.id);
 				var rootNodePos = layout.getNodePosition(rootNode.id);
 				var cb = rootNodePos.x - ((rootNode.data.toNodes.length*100) /2)
@@ -390,7 +394,7 @@
 					//console.log('child  pos: ' + childNodePos.x + ":" + childNodePos.y);
 					childNodePos.x = cb + (100 * index);
 					//console.log('max bef   : ' + maxxRight);
-					if (childNodePos.x >= maxxRight) {maxxRight = childNodePos.x + 100;}
+					if (childNodePos.x + 100 >= maxxRight) {maxxRight = childNodePos.x + 100;}
 					if (childNodePos.x <= maxxLeft) {maxxLeft = maxxLeft - 100; maxxRight = maxxRight + 100;}
 					//console.log('max after : ' + maxxRight);
 					//console.log('child  x  : ' + childNodePos.x);
@@ -402,6 +406,11 @@
 					if (processedNodeIds.indexOf(childNode.id) < 0){
 						//console.log('arranging node' + childNode.id);
 						arrangeBy(childNode, processedNodeIds, maxxRight, maxxLeft, level, startY);
+					}
+					else //cyclic relation
+					{
+						//layout.pinNode(node, false);
+						//node.data.isPinned = false;
 					}
 				});
 			}
@@ -729,6 +738,7 @@
 					},
 					dataType: 'json',
 					success: function (returnbody) {
+						nodeList = [];
 						for (var i = 0; i < returnbody.results.length; i++){
 							var result = returnbody.results[i];
 							for (var d = 0; d < result.data.length; d++){
