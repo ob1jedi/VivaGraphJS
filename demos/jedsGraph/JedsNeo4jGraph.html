@@ -377,7 +377,7 @@
 			}
 			else{
 				
-				console.log('arranging child node: ' + rootNode.id + ' level: ' + level);
+				//console.log('arranging child node: ' + rootNode.id + ' level: ' + level);
 				level++;
 				layout.pinNode(rootNode, true);
 				rootNode.data.isPinned = true;
@@ -385,16 +385,16 @@
 				var rootNodePos = layout.getNodePosition(rootNode.id);
 				var cb = rootNodePos.x - ((rootNode.data.toNodes.length*100) /2)
 				rootNode.data.toNodes.forEach(function(childNode, index){
-					console.log('parent pos: ' + rootNodePos.x + ":" + rootNodePos.y);
+					//console.log('parent pos: ' + rootNodePos.x + ":" + rootNodePos.y);
 					var childNodePos = layout.getNodePosition(childNode.id);
 					//console.log('child  pos: ' + childNodePos.x + ":" + childNodePos.y);
 					childNodePos.x = cb + (100 * index);
-					console.log('max bef   : ' + maxxRight);
+					//console.log('max bef   : ' + maxxRight);
 					if (childNodePos.x >= maxxRight) {maxxRight = childNodePos.x + 100;}
 					if (childNodePos.x <= maxxLeft) {maxxLeft = maxxLeft - 100; maxxRight = maxxRight + 100;}
-					console.log('max after : ' + maxxRight);
-					console.log('child  x  : ' + childNodePos.x);
-					console.log('child  pos: ' + childNodePos.x + ":" + childNodePos.y);
+					//console.log('max after : ' + maxxRight);
+					//console.log('child  x  : ' + childNodePos.x);
+					//console.log('child  pos: ' + childNodePos.x + ":" + childNodePos.y);
 					var childLevel = startY + (level * 150);
 					if (childLevel > childNodePos.y) {childNodePos.y = childLevel};
 					layout.setNodePosition(childNode.id, childNodePos.x, childNodePos.y);
@@ -929,6 +929,11 @@
 		function createNode(){
 			var newNodeValue = document.getElementById('newNodeData').value;
 			Neo4j_CreateNode(newNodeValue);
+		}
+		
+		function getEntityNode(){
+			var newNodeValue = document.getElementById('nodeLabel').value;
+			Neo4j_GetNodesByLabel(newNodeValue);
 		}
 		
 		function deleteNode(){
@@ -1795,6 +1800,7 @@ input {
 	border-radius: 6px;
 	background-color: #b3ffff;
 	border-color: transparent;
+	font-size:12px;
 }.check{width:10px;}
 select {
 	width:100px;
@@ -1803,6 +1809,7 @@ select {
 	border-radius: 6px;
 	background-color: #b3ffff;
 	border-color: transparent;
+    font-size:12px;
 }
 #hovertext:hover {
 	font-size: 15px;
@@ -1861,7 +1868,7 @@ select {
 		
 		<div id='toolPanel'>
 			<div id='newNode'>
-			  <div class="panelheader">New entity:</div>
+			  <div class="panelheader">Data entity:</div>
 			  <input id="newNodeData" type="text" name="lname">
 			  <button onclick='createNode()'>Add Entity</button>
 			</div>
@@ -1934,8 +1941,13 @@ select {
 						<div id="hovertext" onclick='fontDown()'>Move Down</div>
 				</div>
 			</button>
+		</div>
+		<div id='toolPanel'>	
 			<div class="panelheader">Data</div>
+			<input id="nodeLabel" type="text" name="lname">
+			<button onclick='getEntityNode()'>Get Entity</button>
 			<button onclick='GetNodesForSelected()'>Get Next</button>
+			
 		</div>
 		
 
