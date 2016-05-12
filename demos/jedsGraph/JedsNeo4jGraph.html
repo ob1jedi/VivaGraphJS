@@ -33,8 +33,7 @@
 		var defaultNeo4jPassword = 'password1234$';
 		var neo4jUserToken = '';
 		var neo4jServerURL = 'http://localhost:7474';
-		var config = Configuration(connectUser);
-	
+
 		//......Filter settings.............
 		var viewOptions = new viewOptionsType();
 		var interactionOptions = new interactionOptionsType();
@@ -80,8 +79,10 @@
 		themeX.opaque = true;
 		themeX.labelSizing = 'none';
 		
-		
 		currentTheme = THEMES[2];
+		
+		
+		
 		
 		//Singletons...
 		var GRAPH = '';
@@ -102,7 +103,8 @@
 			'ROOT',
 			'COLLECTION'
 		];
-
+		
+		
 		
 //MODELS	
 		function datax() {
@@ -122,6 +124,13 @@
 		  this.fromNodes = [];
 		}
 		
+//STARTUP SEQUENCE
+	Configuration(setConfigSettings);
+	Configuration(connectUser);
+
+
+//FUNCTIONS...
+
 		function neoPropertyList(obj)
 		{
 			var propArray = [];
@@ -182,6 +191,7 @@
 			this.glow = false;
 			this.linkColor = 'red';
 			this.rounded = false;
+			this.showLabels = true;
 		}
 		
 		function getNeoLabel(byName)
@@ -595,6 +605,7 @@
 			Neo4j_GetChildNodesFor(selectedNodeID);
 		}
 		
+		//Get config file...
 		function Configuration(callback)
 		{
 			var body;
@@ -716,6 +727,11 @@
 				});
 		}
 		
+		function Neo4j_RefreshAllRelations()
+		{
+			
+		}
+		
 		function Neo4j_InitAllNodes(byLabel)
 		{
 		
@@ -760,6 +776,40 @@
 				
 		}
 	
+	function Neo4j_InitAllRelations()
+		{
+		
+			//var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
+			var body = '{"statements" : [ { "statement" : "MATCH (n)-[*1]->(m) RETURN id(n), id(m)"} ]}';
+	
+			$.ajax({
+					url: neo4jServerURL + "/db/data/transaction/commit",
+					type: 'post',
+					data: body,//{//access_token: 'XXXXXXXXXXXXXXXXXXX'},
+					headers: {
+						"Accept":'application/json; charset=UTF-8',
+						"Content-Type": 'application/json',
+						"Authorization": 'Basic ' + neo4jUserToken
+					},
+					dataType: 'json',
+					success: function (returnbody) {
+						for (var i = 0; i < returnbody.results.length; i++){
+							
+							var result = returnbody.results[i];
+							for (var d = 0; d < result.data.length; d++){
+								var row = result.data[d].row;
+								if (!getDataLink(row[0], row[1]))
+								{
+									addDataLink(row[0], row[1]);
+									increaseNodeSize(row[0]);
+								}
+							}
+						}
+						
+					}
+				});
+		}
+		
 		function Neo4j_InitAllRelations()
 		{
 		
@@ -915,6 +965,33 @@
 		
 //UI MANIPULATION
 		
+		function setConfigSettings(config)
+		{
+			if (config.displaySettings.usePrebuiltTheme)
+			{
+				currentTheme = THEMES[config.displaySettings.prebuiltThemeIndex];
+				return;
+			}
+			
+			currentTheme.entityRgbRange =config.displaySettings.entityRgbRange;
+			currentTheme.graphBackground =config.displaySettings.graphBackground;
+			currentTheme.entityLabelColor =config.displaySettings.entityLabelColor;
+			currentTheme.entityShape =config.displaySettings.entityShape;
+			currentTheme.opaque =config.displaySettings.opaque;
+			currentTheme.labelSizing =config.displaySettings.labelSizing;
+			currentTheme.shadow =config.displaySettings.shadow;
+			currentTheme.glow =config.displaySettings.glow;
+			currentTheme.linkColor =config.displaySettings.linkColor;
+			currentTheme.rounded =config.displaySettings.rounded;
+			currentTheme.showLabels=config.displaySettings.showLabels;
+			
+			startupLabels = [];
+			config.startupOptions.startupSearch.forEach(function(search, index){
+				startupLabels.push(search.label);
+			});
+			
+		}
+		
 		function connectUser(config){
 			
 			var userName, userPassword;
@@ -950,8 +1027,8 @@
 			Neo4j_DeleteNode(selectedNodeID);
 		}
 		
-		function refreshNodeAppearance(){
-			var node = GRAPH.getNode(selectedNodeID);
+		function refreshNodeAppearance(nodeId){
+			var node = GRAPH.getNode(nodeId?nodeId:selectedNodeID);
 			addNodeToGraph(selectedNodeID,node.data);
 		}
 		
@@ -1070,6 +1147,13 @@
 			});
 		}
 		
+		function showOnNode(nodeId, text)
+		{
+			var node = getDataNode(nodeId);
+			node.data.displayLabel = text;
+			refreshNodeAppearance(nodeId);
+		}
+		
 		function addLabel()
 		{
 			var processingElement = document.getElementById('log');
@@ -1085,21 +1169,31 @@
 		{
 			var processingElement = document.getElementById('selectedNode');
 			var labellist = ''
+			var html = '<a class="panelheader">Selected entity ID:</a> ' + selectedNodeID;
+			html += '<br/><a class="panelheader">Entity type<a>:<br/>' //+ labellist;
+			html += '<table>'
 			node.data.labels.forEach(function(label, index){
 				if (index!=0){labellist += ', ';}
 				var button_onclick = 'deleteLabel(' + node.id + ', \'' + label + '\')';
-				labellist += '<a>' + label + '<button class="fortext tooltip" onclick="'+button_onclick+'" >X<div class="tooltiptext">delete label</div></button></a>'
-				
+				html += '<tr>'
+				html += '<td><a class="dataNameLabel">' + label + '</a></td><td><button class="fortext tooltip" onclick="'+button_onclick+'" >X<div class="tooltiptext">delete label</div></button></td>'	
+				html += '</tr>'
 			});
-			var html = '<a class="panelheader">Selected entity ID:</a> ' + selectedNodeID;
-			html += '<br/><a class="panelheader">Entity type<a>:<br/>' + labellist;
+			html += '</table>'
+			
+			
 			processingElement.innerHTML = html;
 			
 			html = '<a class="panelheader">Properties<a>:';
+			html += '<table>'
 			var processingElement = document.getElementById('nodeDetails');
 			node.data.properties.forEach(function(property, index){
-				html += '<br/>  ' + property.key + ': ' + property.value;
+				html += '<tr>'
+				var button_onclick = 'showOnNode(' + node.id + ', \'' + property.value + '\')';
+				html += '<td> <a class="dataNameLabel">' + property.key + '</a></td><td><a class="dataValueLabel"> ' + property.value + '</a></td><td><button class="fortext tooltip" onclick="'+button_onclick+'">O<div class="tooltiptext">display in node</div></button></td>';
+				html += '</tr>'
 			});
+			html += '</table>'
 			processingElement.innerHTML = html;
 		}
 		
@@ -1346,10 +1440,15 @@
 					.attr('x', -10)// - node.data.displayLabel.length)
 					.attr('fill',currentTheme.entityLabelColor)
 					.attr('stroke-width','0')
-					.attr('font-family','Calibri')
+					//.attr('font-family','Calibri')
+					//.attr('font-family','"Palatino Linotype", "Book Antiqua", Palatino, serif')
+					.attr('font-family','Arial, Helvetica, sans-serif')
+					//.attr('font-family','Verdana')
+					
+			
 					.attr('font-size','20')
 					//.attr('font-size',node.data.nodeSize)
-					.attr('text-decoration', 'underline')
+					//.attr('text-decoration', 'underline')
 					//.attr('font-weight', 'bold')
 					.text(node.data.displayLabel),
 					//if (!currentTheme.opaque) {svgText_Data.attr('fill-opacity',1);}
@@ -1426,8 +1525,8 @@
 				if (currentTheme.glow){ui.append(circleGlow); UI_GLOW_INDEX++; UI_MAIN_INDEX++; UI_SELECTOR_INDEX++; UI_TEXT_INDEX++;}
 				ui.append(circlex);
 				ui.append(uiSelected);
-				ui.append(svgText_Data);
 				
+				if (currentTheme.showLabels){ui.append(svgText_Data);} else {ui.append(Viva.Graph.svg('circle'));}
 
 				
 				ui.attr('nodeSize',node.data.nodeSize);
@@ -1607,6 +1706,8 @@
 			background-opacity: 0.5;
 			border-radius:15px;
 			text-align: center;
+			//height: 100px;
+			//max-height: 50px;
 		  }
 		  .clearfix {
 			overflow: auto;
@@ -1646,14 +1747,24 @@
 			float:top;
 			letter-spacing: 1px;
 		  }
-
+		  .dataNameLabel{
+				color: #ff6600;
+			}
+			.dataValueLabel{
+				color: #ffc299;
+			}
+			.labelDisplay
+			{
+				max-height: 200px;
+			}
+		  
 		  #leftColumn {
 			left:10px;
 			width:230px;
 			margin:0px;
 			padding:0px;
 			border-width:0px;
-			overflow: auto;
+			//overflow: auto;
 			position: fixed;
 		  }
 		  
@@ -1663,7 +1774,7 @@
 			margin:0px;
 			padding:0px;
 			border-width:0px;
-			overflow: hidden;
+			//overflow: hidden;
 			position: fixed;
 		  }
 		  
@@ -1745,7 +1856,7 @@ button:hover {
     border-width: 5px;
     border-style: solid;
     border-color: #555 transparent transparent transparent;
-	
+	position: absolute;
 }
 /* Show the tooltip text when you mouse over the tooltip container */
 .tooltip:hover .tooltiptext {
@@ -1787,9 +1898,9 @@ button:hover {
 
 /* popup arrow */
 .popup .popuptext::after {
-    content: "-";
+    content: "";
 	
-    position: absolute;
+    //position: absolute;
     top: 100%;
     left: 50%;
     margin-left: 5px;
@@ -1843,7 +1954,7 @@ select {
 	</div>
 	
 	<div id='leftColumn'>
-		<div id='toolPanel' style='overflow:auto;'>
+		<div id='toolPanel' class="labelDisplay" style='overflow:auto;'>
 			<span id="availableLabels" class="label"></span>
 		</div>
 		

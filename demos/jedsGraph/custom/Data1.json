@@ -1,12 +1,44 @@
 var jsonObject = {
-"Configuration":
-	{
+"Configuration":{
 	"neo4jconnection":
 		{	"server":"http://localhost:7474",
 			"username":"neo4j",
-			"password":"password1234$"
+			"password":"Password@12345"
 		},
+	"startupOptions":{
+		"startupSearch":[
+			{"label":"ROOT"},
+			{"label":"SCHEMA_ROOT"},
+			{"label":"Test4"},
+			{"label":"HELLO"}
+		]
+	},
 	"viewoptions":{},
-	"displaySettings":{}
+	"displaySettings":{
+			"usePrebuiltTheme":false, /* set to false to use the settings in this file instead(below)*/
+			"prebuiltThemeIndex":3,
+			/*The 4bit rgb range from which label colors can be automatically generated.*/
+			"entityRgbRange":{"min":40,"max":140},
+			"showLabels":true,
+			"graphBackground":"#0e1a25",
+			"entityLabelColor":"white",
+			"entityShape":"rect",
+			"opaque":false,
+			/*choices: 
+				rect (entities are rectangular)
+				circle (entities are circles)
+			*/
+			"labelSizing":"fontsize", 
+			/*choices: 
+				"hyphenate" (make labels shorter)
+				"fontsize" (make the font size smaller)
+				"" (no sizing, labels may extend past the boundaries of the node)
+			*/
+			"shadow":false, /*...outer node shadow*/
+			"glow":false, /*...outer node glow*/
+			"linkColor":"#21415f", /*...html/hex color*/
+			"rounded":false /*...inner node shadow*/
+			
+		}
 	}
 }
