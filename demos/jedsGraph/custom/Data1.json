@@ -3,7 +3,7 @@ var jsonObject = {
 	"neo4jconnection":
 		{	"server":"http://localhost:7474",
 			"username":"neo4j",
-			"password":"Password@12345"
+			"password":"Password@123456"
 		},
 	"startupOptions":{
 		"startupSearch":[
@@ -11,14 +11,21 @@ var jsonObject = {
 			{"label":"SCHEMA_ROOT"},
 			{"label":"Test4"},
 			{"label":"HELLO"}
+		],
+		"nodeDisplayValues":[
+			{"forLabel":"Test4", "displayField":"Active"},
+			{"forLabel":"Person", "displayField":"name"},
+			{"forLabel":"Movie", "displayField":"title"}
 		]
 	},
-	"viewoptions":{},
+	"viewoptions":{},	
 	"displaySettings":{
 			"usePrebuiltTheme":false, /* set to false to use the settings in this file instead(below)*/
 			"prebuiltThemeIndex":3,
 			/*The 4bit rgb range from which label colors can be automatically generated.*/
 			"entityRgbRange":{"min":40,"max":140},
+			"showRelationships":"all", //TODO: need to implement "on-highlight"
+			/*showRelationships: "all/on-highlight/none" */
 			"showLabels":true,
 			"graphBackground":"#0e1a25",
 			"entityLabelColor":"white",
