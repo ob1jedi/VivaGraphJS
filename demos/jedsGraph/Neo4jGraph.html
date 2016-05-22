@@ -14,9 +14,10 @@
 //==========Globals ==================================================================================================================================================================			
 		//const UI_SHADOW_INDEX = 0;
 		var UI_GLOW_INDEX = 0;
-		var UI_MAIN_INDEX = 0;
-		var UI_SELECTOR_INDEX = 1;
-		var UI_TEXT_INDEX = 2;
+		var UI_MAIN_INDEX = 1;
+		var UI_SELECTOR_INDEX = 2;
+		var UI_TEXT_INDEX = 3;
+		var UI_POPTEXT_INDEX = 4;
 		//.....Functional variables.......
 		var labelsList = []; //list of neoLabel objects
 		var nodeList = []; //list of node objects
@@ -28,7 +29,8 @@
 		var selectedNodeUI = '';
 		var bRelate = false;
 		var counter = 10;	
-		
+		var detailsUI;
+		var detailsNode;
 		//......Connection settings........
 		var defaultNeo4jUsername = 'neo4j';
 		var defaultNeo4jPassword = 'password1234$';
@@ -47,21 +49,30 @@
 		var labelSize = 30;
 		
 		//Theme 0
-		var themeX = new theme({min:100,max:200},'#cccccc', '#0d0d0d', 'rect'); //light 
+		var themeX = new theme();
+		themeX.entityRgbRange={min:100,max:200}; 
+		themeX.graphBackground='#cccccc'; 
+		themeX.entityLabelColor='#0d0d0d';
 		themeX.shadow = true;
 		themeX.glow = false;
 		THEMES.push(themeX);
 		themeX.linkColor = 'gray';
 		
 		//Theme 1
-		themeX = new theme({min:70,max:150},'#0d0d0d', '#cccccc', 'rect'); //dark
+		themeX = new theme();
+		themeX.entityRgbRange={min:70,max:150}; 
+		themeX.graphBackground='#cccccc'; 
+		themeX.entityLabelColor='#0d0d0d';
 		themeX.shadow = true;
 		themeX.glow = false;
-		THEMES.push(themeX); //dark
+		THEMES.push(themeX);
 		themeX.linkColor = 'gray';
 		
 		//Theme 2 (Black hole)
-		themeX = new theme({min:0,max:10},'#0d0d0d', '#cccccc', 'rect'); //dark
+		themeX = new theme();
+		themeX.entityRgbRange={min:0,max:10}; 
+		themeX.graphBackground='#0d0d0d'; 
+		themeX.entityLabelColor='#cccccc';
 		THEMES.push(themeX);
 		themeX.shadow = false;
 		themeX.rounded = false;
@@ -70,7 +81,10 @@
 		themeX.entityLabelColor = '#ccffff';
 		
 		//Theme 3 (eco 1)
-		themeX = new theme({min:50,max:100},'#262626', '#262626', 'rect'); //dark
+		themeX = new theme();
+		themeX.entityRgbRange={min:50,max:100}; 
+		themeX.graphBackground='#262626'; 
+		themeX.entityLabelColor='#262626';
 		THEMES.push(themeX);
 		themeX.shadow = false;
 		themeX.glow = false;
@@ -108,13 +122,18 @@
 		
 		
 //MODELS	
+		//Node model
 		function datax() {
+		  this.nodeType = 'data';
 		  this.id = 0;
 		  this.labels = [];
 		  this.nodeSize = 25;
 		  this.nodeColor = '#808080';
-		  this.nodeColorRGB = {r:0,g:0,b:0};
-		  this.nodeOpacity = '0.9'
+		  this.nodeShape = 'circle';
+		  this.height = 25;
+		  this.width = 25;
+		  this.nodeColorRGB = {r:100,g:100,b:100};
+		  this.nodeOpacity = '1'
 		  this.textColor = '#ffffff';
 		  this.displayLabel = '';
 		  this.isPinned = false; 
@@ -123,7 +142,18 @@
 		  this.fromLinks = [];
 		  this.toNodes = [];
 		  this.fromNodes = [];
+		  return this;
 		}
+		
+		//Link model
+		function datay(){
+			this.id = -1;
+			this.name = '';
+			this.properties = [];
+			this.markerUI;
+			return this;
+		}
+		
 		
 //STARTUP SEQUENCE
 	var config_ext;
@@ -141,6 +171,14 @@
 			}
 			return propArray;
 		}
+		function propertyListToSvgList(propertyList, prefix, suffix)
+		{
+			var proplist = ''; 
+			propertyList.forEach(function(prop){
+				proplist += prefix + prop.key + ": " + prop.value + suffix;
+			})
+			return proplist;
+		}
 		
 		function neoLabel(setName, setColor, setColorRGB)
 		{
@@ -150,12 +188,17 @@
 			return this;
 		}
 		
-		function linkType(fromNodeID, toNodeID)
+		function linkType(fromNodeID, toNodeID, linkData, dataLinkid, UiLinkId)
 		{
+			this.dataId = dataLinkid;
+			this.UiId = UiLinkId;
+			this.markerUI;
 			this.FromNodeID = fromNodeID;
 			this.ToNodeID = toNodeID;
+			this.data = linkData;
 			return this;
 		}
+		
 		
 		function viewOptionsType()
 		{
@@ -171,13 +214,13 @@
 			return this;
 		}
 		
-		function theme(entityRgbRange, graphBackground, entityLabelColor, entityShape)
+		function theme(entityRgbRange, graphBackground, entityLabelColor)
 		{
 			this.entityRgbRange = (entityRgbRange)?entityRgbRange: {min:100,max:200};
 			/*The 4bit rgb range from which label colors can be automatically generated.*/
 			this.graphBackground = (graphBackground)?graphBackground: '#1a1a1a';
 			this.entityLabelColor = (entityLabelColor)?entityLabelColor: 'white';
-			this.entityShape = (entityShape)?entityShape: 'rect';
+			//this.entityShape = (entityShape)?entityShape: 'rect';
 			this.opaque = false;
 			/*choices: 
 				rect (entities are rectangular)
@@ -207,17 +250,29 @@
 			});
 			return x;
 		}
-		function getDataLink(fromNodeID, toNodeID)
+		function getDataLink(fromNodeID, toNodeID, id)
 		{
 			var x;
 				linkList.forEach(function(link, index){
-				if (link.FromNodeID == fromNodeID && link.ToNodeID == toNodeID){
+				if (link.FromNodeID == fromNodeID && link.ToNodeID == toNodeID && link.data.id == id){
 					x = link;
 					return link;
 				}
 			});
 			return x;
 		}
+		function getDataLinks(fromNodeID, toNodeID)
+		{
+			var x = [];
+				linkList.forEach(function(link, index){
+				if ((link.FromNodeID == fromNodeID && link.ToNodeID == toNodeID) ||
+					(link.ToNodeID == fromNodeID && link.FromNodeID == toNodeID)){
+					x.push(link);
+				}
+			});
+			return x;
+		}
+		
 		function getNodePropertyValue(node, propertyName)
 		{
 			var x;
@@ -254,16 +309,44 @@
 			this.statement = statement;
 			return this;
 		}
-//CUSTOM GRAPH FUNCTIONS
-		function Neo4j_Connect()
-		{ //This just creates a base64 string from the users Neo4j creds, 
-		  //which then gets passed in as authentication along with their API call.
-			//connectUser(config);
-			//Neo4j_InitAllNodes();
-
-			hideNeo4jConnect();
-		}
+//CUSTOM GRAPH FUNCTIONS	
 		
+		function addDataLabel(labelName)
+		{	
+			if(getNeoLabel(labelName)) return;
+			
+			var rgb = {r: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max)),
+								   g: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max)),
+								   b: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max))
+						}
+						var randomColor = rgb2hex(rgb.r, rgb.g, rgb.b);
+						var newDataLabel = new neoLabel(labelName, randomColor, rgb);
+						
+						//Add new data label to labels-list
+						labelsList.push(newDataLabel);
+						labelsList.sort(sort_by('name', false, function(a){return a.toUpperCase()}));
+						
+						//Add selector to HTML...
+						var qbuilderFromEntitySelector = document.getElementById('qbuilder.from.entity');
+						var qbuilderToEntitySelector = document.getElementById('qbuilder.to.entity');
+						var LabelsDiv = document.getElementById('availableLabels');
+						LabelsDiv.innerHTML = '';
+						qbuilderFromEntitySelector.innerHTML = '';
+						qbuilderToEntitySelector.innerHTML = '';
+						labelsList.forEach(function(label,index){
+							var color = 'gray';
+							//if (refonly) {color = 'darkgray';}
+							var button_onclick = "Neo4j_GetNodesByLabel('"+label.name+"')";
+							var fetchButton = '<button class="fortext tooltip" onclick="'+button_onclick+'">F<div class="tooltiptext">Fetch from database</div></button>'
+							LabelsDiv.innerHTML = LabelsDiv.innerHTML + 
+								'<div onclick="highlightLabel('+index+')" id="labelPanel" style="background-color:'+color+';">' + label.name + fetchButton
+								'</div>';
+							qbuilderFromEntitySelector.innerHTML += '<option value="'+label.name+'">' +label.name+ '</option>';
+							qbuilderToEntitySelector.innerHTML += '<option value="'+label.name+'">' +label.name+ '</option>';
+						});
+						
+			return newDataLabel;
+		}
 		
 		function addDataNode(nodeId, nodeData)
 		{
@@ -281,17 +364,11 @@
 			
 			dataNode.data.displayLabel = "";
 			dataNode.data.labels.forEach(function(label, index){
-				if(!getNeoLabel(label)) {
-					var rgb = {r: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max)),
-							   g: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max)),
-							   b: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max))
-					}
-					var randomColor = rgb2hex(rgb.r, rgb.g, rgb.b);
-					var newLabel = new neoLabel(label, randomColor, rgb);
-					
-					labelsList.push(newLabel);
+				//if(!getNeoLabel(label)) {
+				addDataLabel(label);
+					//labelsList.push(newLabel);
 					//addVisLabel(newLabel, labelsList.length-1);
-				}
+				//}
 				
 				//Don't show hidden labels...
 				if (hiddenLabels.indexOf(label) < 0){
@@ -326,19 +403,115 @@
 			//var newNodeUI = graphics.getNodeUI(nodeId);
 			//var textWidth = newNodeUI.children[2];
 			//newNodeUI.children[2].attr('x', -textWidth/2);
+			
 			addNodeToGraph(dataNode.id,dataNode.data);
 			showNodeDetails(dataNode);
 			return dataNode;
 			
 		}
-				
-		function addDataLink(fromNodeID, toNodeID, relationshipData)
+		
+		function Neo4j_extractProperties(nodesResult) //extract properties from a collection of nodes, from a cypher node search
 		{
-		console.log(relationshipData);
+			for (var i = 0; i < nodesResult.results.length; i++){		
+				var result = nodesResult.results[i];
+				for (var d = 0; d < result.data.length; d++){
+					var row = result.data[d].row;
+					return new neoPropertyList(row[0]);
+				}
+			}
+			return;
+		}
+		
+		function qbuilder(selectType)
+		{
+			if (selectType == 'qbuilder.from.entity' || selectType == 'qbuilder.to.entity'){
+				//get properties...
+				var propElementName;
+				if (selectType == 'qbuilder.from.entity') {propElementName = 'qbuilder.from.property'}
+				else if (selectType == 'qbuilder.to.entity') {propElementName = 'qbuilder.to.property'}
+				var selectedTypeValue = document.getElementById(selectType).value;
+				var command = "MATCH (n:"+selectedTypeValue+") return n";
+				var callback = function(nodesResult){
+					var propertList = Neo4j_extractProperties(nodesResult)
+					var propertyElement = document.getElementById(propElementName);
+					propertyElement.innerHTML = '';
+					propertList.forEach(function(prop){
+						propertyElement.innerHTML += '<option value="'+prop.key+'">' + prop.key + '</option>';
+					});
+				};
+				Neo4j_Command([command], callback);
+			}
+			
+		}
+		
+		
+		function querySearch()
+		{
+			var fromEntity = document.getElementById('qbuilder.from.entity').value;
+			var fromProperty = document.getElementById('qbuilder.from.property').value;
+			var fromValue = document.getElementById('qbuilder.from.value').value;
+			var toEntity = document.getElementById('qbuilder.to.entity').value;
+			var toProperty = document.getElementById('qbuilder.to.property').value;
+			var toValue = document.getElementById('qbuilder.to.value').value;
+			
+			var command = 'MATCH (n:'+fromEntity+'{'+fromProperty+':"'+fromValue+'"})-[r*]-(m:'+toEntity+'{'+toProperty+':"'+toValue+'"}) RETURN id(n), id(m), id(r), type(r), r';
+			var callback = function(nodesResult){
+				addNodesFromResults(nodesResult)
+			};
+			Neo4j_Command([command], callback);
+		}
+		
+		function addNodesFromResults(nodesResults)
+		{
+			for (var i = 0; i < nodesResults.results.length; i++){
+				
+				var result = nodesResults.results[i];
+				for (var d = 0; d < result.data.length; d++){
+					var row = result.data[d].row;
+					var dat = new datax;
+					dat.id =row[1];
+					if (row[2]){dat.labels = row[2];}
+					if (row[3]){dat.properties = new neoPropertyList(row[3]);}
+					var node = addDataNode(row[1], dat);
+					if (!GRAPH.getNode(row[1])){
+						var pos = layout.getNodePosition(row[0]);
+						layout.setNodePosition(row[1], pos.x, pos.y);
+					}
+					if (!getDataLink(row[0], row[1], row[4]))
+					{
+						var linkdata = new datay();
+						linkdata.id = row[4];
+						linkdata.name = row[5];
+						linkdata.properties = new neoPropertyList(row[6]);
+						addDataLink(row[0], row[1], linkdata);
+					}
+					//fixTextWidth();
+				}
+			}
+		}
+		
+		function addWindowNode()
+		{
+		
+			var nodeId = 'DetailsWindow';
+			var data = new datax();
+			data.height = 200;
+			data.width = 200;
+			data.nodeShape = 'rect';
+			data.nodeType = 'window';
+			data.isPinned = true;
+			detailsNode = addNodeToGraph(nodeId, data);
+			layout.pinNode(detailsNode, true);
+			return graphics.getNodeUI(nodeId);	
+		}
+		
+		function addDataLink(fromNodeID, toNodeID, linkData)
+		{
+		//console.log(relationshipData);
 			//var linkData = {};relationshipData;
 			//linkData.connectionStrength = 110;
-			var link = GRAPH.addLink(fromNodeID, toNodeID, relationshipData);
-			linkList.push(new linkType(fromNodeID,toNodeID)); 
+			var link = GRAPH.addLink(fromNodeID, toNodeID, linkData);
+			
 			//var otherLinks = GRAPH.getLinks(fromNodeID);
 			//otherLinks.forEach(function(otherlink) {
 			//	otherlink.data.connectionStrength+= 1;
@@ -347,6 +520,9 @@
 			var fromNode = GRAPH.getNode(fromNodeID);
 			var linkUI = graphics.getLinkUI(link.id);
 			linkUI.attr('fromNode',fromNodeID).attr('toNode',toNodeID);
+			linkUI.attr('linkDataId',link.id);
+			linkUI.attr('linkIndex', getDataLinks(fromNodeID, toNodeID).length);
+			linkList.push(new linkType(fromNodeID,toNodeID, linkData, link.id, linkUI.id)); 
 			
 			toNode.data.fromLinks.push(link);
 			toNode.data.fromNodes.push(fromNode);
@@ -502,6 +678,7 @@
 			var node = GRAPH.getNode(nodeId);
 			node.data.nodeSize = node.data.nodeSize * 1.05;
 			addNodeToGraph(node.id,node.data);
+			increaseNodeSprings(node.id);
 			//node.data.toLinks.forEach(function(link){
 				//var linkUI = graphics.getLinkUI(link.id);
 				//linkUI.attr('stroke-width',node.data.nodeSize/5);
@@ -547,17 +724,12 @@
 			});
 		}
 		
-		function createLabelDiplay()
-		{
-			labelsList.sort(sort_by('name', false, function(a){return a.toUpperCase()}));
-			var LabelsDiv = document.getElementById('availableLabels');
-			LabelsDiv.innerHTML = '';
-			labelsList.forEach(function(label,index){
-				LabelsDiv.innerHTML = LabelsDiv.innerHTML + 
-					'<div onclick="highlightLabel('+index+')" id="labelPanel" style="background-color:gray;">' + label.name + 
-					'</div>';
-			});
-		}
+		//function addLabelSelector(labelName)
+		//{
+			//console.log(labelName);
+			//if (getNeoLabel(labelName)) return;
+
+		//}
 //USEFULL FUNCTIONS
 		//convert string to Base64
 		//var encodedData = window.btoa(stringToEncode);
@@ -642,7 +814,7 @@
 		function Neo4j_GetChildNodesFor(neo_nodeid)
 		{
 			var statements = [];
-			statements.push("MATCH (n)-[r]->(m) where id(n) = "+ neo_nodeid +" RETURN id(n), id(m), labels(m), (m), type(r)");
+			statements.push("MATCH (n)-[r]->(m) where id(n) = "+ neo_nodeid +" RETURN id(n), id(m), labels(m), (m), id(r), type(r), r");
 			var body = new neo_APIcall(); 
 			statements.forEach(function(statement){
 				body.statements.push(new neo_Statement(statement));
@@ -674,14 +846,18 @@
 									var pos = layout.getNodePosition(row[0]);
 									layout.setNodePosition(row[1], pos.x, pos.y);
 								}
-								if (!getDataLink(row[0], row[1]))
+								if (!getDataLink(row[0], row[1], row[4]))
 								{
-									addDataLink(row[0], row[1], row[4]);
+									var linkdata = new datay();
+									linkdata.id = row[4];
+									linkdata.name = row[5];
+									linkdata.properties = new neoPropertyList(row[6]);
+									addDataLink(row[0], row[1], linkdata);
 								}
 								//fixTextWidth();
 							}
 						}
-						createLabelDiplay();
+						//createLabelDiplay();
 					}
 				});
 		}
@@ -713,14 +889,14 @@
 								addDataNode(row[0], dat);
 							}
 						}
-						createLabelDiplay();
+						//createLabelDiplay();
 					}
 				});
 		}
 		
 		function Neo4j_GetNodesByLabel(byLabel)
 		{
-			
+			//console.log("Getting Nodes: " + byLabel);
 			var matchPattern = 'n';
 			if (byLabel) {matchPattern += ":" + byLabel;}
 			//var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
@@ -748,7 +924,7 @@
 								addDataNode(row[0], dat);
 							}
 						}
-						createLabelDiplay();
+						//createLabelDiplay();
 					}
 				});
 		}
@@ -760,7 +936,7 @@
 		
 		function Neo4j_InitAllNodes(byLabel)
 		{
-		
+			
 			var matchPattern = 'n';
 			if (byLabel) {matchPattern += ":" + matchPattern;}
 		//var bodyStart = '{"statements" : [ { "statement" : "MATCH (n) RETURN id(n),labels(n)"} ]}';
@@ -794,53 +970,19 @@
 								//}
 							}
 						}
-						createLabelDiplay();
+						//createLabelDiplay();
 						Neo4j_InitAllRelations();
 					}
 				});
 				
 				
 		}
-	
-	function Neo4j_InitAllRelations()
-		{
-		
-			//var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
-			var body = '{"statements" : [ { "statement" : "MATCH (n)-[r]->(m) RETURN id(n), id(m), type(r)"} ]}';
-	
-			$.ajax({
-					url: neo4jServerURL + "/db/data/transaction/commit",
-					type: 'post',
-					data: body,//{//access_token: 'XXXXXXXXXXXXXXXXXXX'},
-					headers: {
-						"Accept":'application/json; charset=UTF-8',
-						"Content-Type": 'application/json',
-						"Authorization": 'Basic ' + neo4jUserToken
-					},
-					dataType: 'json',
-					success: function (returnbody) {
-						for (var i = 0; i < returnbody.results.length; i++){
-							
-							var result = returnbody.results[i];
-							for (var d = 0; d < result.data.length; d++){
-								var row = result.data[d].row;
-								if (!getDataLink(row[0], row[1]))
-								{
-									addDataLink(row[0], row[1], row[2]);
-									increaseNodeSize(row[0]);
-								}
-							}
-						}
-						
-					}
-				});
-		}
-		
+
 		function Neo4j_InitAllRelations()
 		{
 		
 			//var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
-			var body = '{"statements" : [ { "statement" : "MATCH (n)-[r]->(m) RETURN id(n), id(m), type(r)"} ]}';
+			var body = '{"statements" : [ { "statement" : "MATCH (n)-[r]->(m) RETURN id(n), id(m), id(r), type(r), r"} ]}';
 	
 			$.ajax({
 					url: neo4jServerURL + "/db/data/transaction/commit",
@@ -854,14 +996,16 @@
 					dataType: 'json',
 					success: function (returnbody) {
 						for (var i = 0; i < returnbody.results.length; i++){
-							
 							var result = returnbody.results[i];
 							for (var d = 0; d < result.data.length; d++){
 								var row = result.data[d].row;
-								if (!getDataLink(row[0], row[1]))
+								var linkdata = new datay();
+								linkdata.id = row[2];
+								linkdata.name = row[3];
+								linkdata.properties = new neoPropertyList(row[4]);
+								if (!getDataLink(row[0], row[1], row[2]))
 								{
-									var newlink = addDataLink(row[0], row[1], row[2]);
-									
+									var newlink = addDataLink(row[0], row[1], linkdata );
 									increaseNodeSize(row[0]);
 								}
 							}
@@ -947,9 +1091,7 @@
 			body += ' match (m) where ID(m) = ' + NodeID2;
 			body += ' create (n)-[r:TEST]->(m)';
 			body += ' RETURN id(r)"}]}';
-			
 
-			
 			$.ajax({
 					url: neo4jServerURL + "/db/data/transaction/commit",
 					type: 'post',
@@ -1000,10 +1142,14 @@
 				return;
 			}
 			
+			currentTheme.loadNodePopouts =config.displaySettings.loadNodePopouts;
+			currentTheme.loadRelationPopouts = config.displaySettings.loadRelationPopouts;
+			currentTheme.entityRgbRange =config.displaySettings.entityRgbRange;
+			
 			currentTheme.entityRgbRange =config.displaySettings.entityRgbRange;
 			currentTheme.graphBackground =config.displaySettings.graphBackground;
 			currentTheme.entityLabelColor =config.displaySettings.entityLabelColor;
-			currentTheme.entityShape =config.displaySettings.entityShape;
+			//currentTheme.entityShape = config.displaySettings.entityShape;
 			currentTheme.opaque =config.displaySettings.opaque;
 			currentTheme.labelSizing =config.displaySettings.labelSizing;
 			currentTheme.shadow =config.displaySettings.shadow;
@@ -1012,9 +1158,20 @@
 			currentTheme.rounded =config.displaySettings.rounded;
 			currentTheme.showLabels=config.displaySettings.showLabels;
 			currentTheme.showRelationships = config.displaySettings.showRelationships;
+			currentTheme.showRelationProperties = config.displaySettings.showRelationProperties;
 			startupLabels = [];
 			config.startupOptions.startupSearch.forEach(function(search, index){
 				startupLabels.push(search.label);
+			});
+			
+			
+			//setting up panels...
+			config.viewOptions.panels.forEach(function(panel){
+				var elParent = document.getElementById(panel.parent)
+				var elPanel = document.getElementById(panel.name);
+				elParent.innerHtml += elPanel;
+				//elPanel.attr('visibility', (panel)?'visible':'hidden');
+				//{"panels":[{"name":"panelSelectionOptions", "parent":"leftColumn", "visibility":true}]}
 			});
 			
 			//Set global variable
@@ -1031,15 +1188,13 @@
 			//Call Base64 function to get token...
 			neo4jUserToken =  window.btoa(userName + ':' + userPassword);
 			
+			getAllLabels(); //..get all entity names from the DB
+			
 			startupLabels.forEach(function(label){
 					Neo4j_GetNodesByLabel(label);
 				});
 				
 			
-		}
-		
-		function hideNeo4jConnect(){
-			document.getElementById("connectDets").remove();
 		}
 		
 		function createNode(){
@@ -1058,7 +1213,7 @@
 		
 		function refreshNodeAppearance(nodeId){
 			var node = GRAPH.getNode(nodeId?nodeId:selectedNodeID);
-			addNodeToGraph(selectedNodeID,node.data);
+			addNodeToGraph(node.id,node.data);
 		}
 		
 		function Neo4jRowReturn(returnbody, callback) {
@@ -1101,6 +1256,11 @@
 			var minWidth = widthOfNode - widthOfNode * 0.1;
 			var widthOfText = Number(nodeUI.children[UI_TEXT_INDEX].getBBox().width);
 			var text = nodeUI.children[UI_TEXT_INDEX].text();
+			
+			
+			var heightOfPoptext = Number(nodeUI.children[UI_POPTEXT_INDEX].getBBox().height);
+			if (heightOfPoptext > 0){nodeUI.children[UI_GLOW_INDEX].attr('height',heightOfPoptext + 30);}
+			
 			if (!text || text.length == 0) {return;}
 			
 			var failer = 0;
@@ -1183,6 +1343,29 @@
 			refreshNodeAppearance(nodeId);
 		}
 		
+		function increaseNodeSprings(nodeid)
+		{
+			if (!nodeid){nodeid=selectedNodeID;}
+			var node = getDataNode(nodeid);
+			
+			node.data.toNodes.forEach(function(toNode){
+				var nodespring = layout.getSpring(nodeid, toNode.id);
+				nodespring.length += 10;
+			});
+			node.data.fromNodes.forEach(function(toNode){
+				var nodespring = layout.getSpring(toNode.id, nodeid);
+				nodespring.length += 10;
+			});
+			
+		}
+		
+		function increaseNodeMass(nodeid)
+		{
+			if (!nodeid){nodeid=selectedNodeID;}
+			var nodebod = layout.getBody(nodeid);
+			nodebod.mass++;
+		}
+						
 		function addLabel()
 		{
 			var processingElement = document.getElementById('log');
@@ -1192,6 +1375,20 @@
 			var command = "MATCH (n) where ID(n) = " + selectedNodeID + " SET n:" + processingElement.value;
 			var callback = function(){Neo4j_GetNodeById(selectedNodeID)};
 			Neo4j_Command([command], callback, callback);
+		}
+		
+		function getAllLabels()
+		{
+			var command = "match n return distinct labels(n)";
+			var callback = function(data){
+				data.results[0].data.forEach(function (dataobject){
+					dataobject.row[0].forEach(function (label){
+						addDataLabel(label)
+					});
+					
+				});
+			};
+			Neo4j_Command([command], callback);
 		}
 		
 		function showNodeDetails(node)
@@ -1205,7 +1402,7 @@
 				if (index!=0){labellist += ', ';}
 				var button_onclick = 'deleteLabel(' + node.id + ', \'' + label + '\')';
 				html += '<tr>'
-				html += '<td><a class="dataNameLabel">' + label + '</a></td><td><button class="fortext tooltip" onclick="'+button_onclick+'" >X<div class="tooltiptext">delete label</div></button></td>'	
+				html += '<td><button class="fortext tooltip" onclick="'+button_onclick+'" >X<div class="tooltiptext">delete label</div></button></td><td><a class="dataNameLabel">' + label + '</a></td>'	
 				html += '</tr>'
 			});
 			html += '</table>'
@@ -1219,7 +1416,7 @@
 			node.data.properties.forEach(function(property, index){
 				html += '<tr>'
 				var button_onclick = 'showOnNode(' + node.id + ', \'' + property.value + '\')';
-				html += '<td> <a class="dataNameLabel">' + property.key + '</a></td><td><a class="dataValueLabel"> ' + property.value + '</a></td><td><button class="fortext tooltip" onclick="'+button_onclick+'">O<div class="tooltiptext">display in node</div></button></td>';
+				html += '<td><button class="fortext tooltip" onclick="'+button_onclick+'">O<div class="tooltiptext">display in node</div></button></td><td> <a class="dataNameLabel">' + property.key + '</a></td><td><a class="dataValueLabel"> ' + property.value + '</a></td>';
 				html += '</tr>'
 			});
 			html += '</table>'
@@ -1229,17 +1426,10 @@
 		function highlightRelatedNodes(nodeId, isOn) {				   
 		   // just enumerate all realted nodes and update link color:
 		   GRAPH.forEachLinkedNode(nodeId, function(node, link){
-			   //var linklabelId = 'link'+link.fromId + 'To' + link.toId;
 			   var linkUI = graphics.getLinkUI(link.id);
-			   //var strokeWidth = Number(linkUI.attr('stroke-width'));
 			   if (linkUI) {
-				   // linkUI is a UI object created by graphics below
-				   linkUI.attr('stroke', isOn ? '#cc3300' : currentTheme.linkColor)
-					.attr('stroke-width', isOn ? 4 : 3);
-					
-					//.attr('fill-opacity',isOn ? 1 : 0);
-					//.attr('markerHeight', "20");
-					//.attr('fill', isOn ? '#cc3300' : 'gray');
+				   linkUI.children[0].attr('stroke', isOn ? '#cc3300' : currentTheme.linkColor)
+				   //link.data.markerUI.children[0].attr('fill',isOn ? 'silver' : 'transparent');
 			   }
 		   });
 		}
@@ -1255,11 +1445,8 @@
 				descendantNode.data.toLinks.forEach(function(link){
 					var linkUI = graphics.getLinkUI(link.id);
 					if (linkUI) {
-						linkUI.attr('stroke', isOn ? '#cc3300' : currentTheme.linkColor)
-							.attr('stroke-width', isOn ? 4 : 3)
+						linkUI.children[0].attr('stroke', isOn ? '#cc3300' : currentTheme.linkColor)
 					}
-					//highlightedUILinks.push(linkUI);
-					//descendantNodes.pop();
 				});
 				
 				descendantNode.data.toNodes.forEach(function (node){
@@ -1267,7 +1454,6 @@
 				});
 				
 				i++;
-				//descendantNodes.concat(descendantNode.data.toNodes);
 		   }
 		}
 		
@@ -1281,8 +1467,7 @@
 				ancestorNode.data.fromLinks.forEach(function(link){
 					var linkUI = graphics.getLinkUI(link.id);
 					if (linkUI) {
-						linkUI.attr('stroke', isOn ? '#cc3300' : currentTheme.linkColor)
-							.attr('stroke-width', isOn ? 4 : 3)
+						linkUI.children[0].attr('stroke', isOn ? '#cc3300' : currentTheme.linkColor)
 					}
 				});
 				ancestorNode.data.fromNodes.forEach(function (node){
@@ -1312,11 +1497,21 @@
 		   if (interactionOptions.checkNodes){
 			checkedNodes.push(node);
 			nodeUI.children[UI_MAIN_INDEX].attr('stroke','#99ff33');
+			if (currentTheme.loadNodePopouts){nodeUI.children[UI_POPTEXT_INDEX].attr('class','showText');}
+			node.data.toLinks.forEach(function(link){
+				if (currentTheme.showRelationships == "on-highlight"){link.data.markerUI.children[0].attr('fill','silver');}
+			});
+			
 		   }
 		   else{
 			checkedNodes.forEach(function(nodex){
+				
 				var checkednodeUI = graphics.getNodeUI(nodex.id);
 				checkednodeUI.children[UI_MAIN_INDEX].attr('stroke','transparent');
+				if (currentTheme.loadNodePopouts){checkednodeUI.children[UI_POPTEXT_INDEX].attr('class','slideText');}
+				nodex.data.toLinks.forEach(function(link){
+					if (currentTheme.showRelationships == "on-highlight"){link.data.markerUI.children[0].attr('fill','transparent');}
+				});
 			});
 		   }
 		   
@@ -1325,9 +1520,9 @@
 		   selectedNodeData = node.data;
 		   selectedNode = node;
 		   selectedNodeUI = nodeUI;
-		   showNodeDetails(node);			   
+		   showNodeDetails(node);	
 		}
-	
+
 		//function fetchInfo(id) {
 		//	var root = 'https://secure.gravatar.com/avatar/91bad8ceeec43ae303790f8fe238164b';
 		//	return $.getJSON(root);
@@ -1343,7 +1538,8 @@
             //graph.addNode('indexzero',function(){var d = new Date(); return d.getTime() }()); // 'd43e8ea63b61e7669ded5b9d3c2e980f');
 			//graph.addNode('asdasd', 'test3'); //'d43e8ea63b61e7669ded5b9d3c2e980f');
             //graph.addLink('anvaka', 'indexzero'); //'indexzero');
-			
+			//addDataNode
+
 			// Custom physics... (include/exclude in the 'renderer' at the bottom of the script)
 			var idealLength = 150;
 			layout = Viva.Graph.Layout.forceDirected(graph, {
@@ -1375,116 +1571,222 @@
                 //     .attr('width', nodeSize)
                 //     .attr('height', nodeSize)
                 //     .link('https://secure.gravatar.com/avatar/' + node.data),
+				if (node.data.nodeType == 'data')
+				{
+					rectx = Viva.Graph.svg('rect')
+						.attr('class', 'slideout')
+						.attr('x', node.data.nodeSize/2)
+						.attr('y', -node.data.nodeSize/2)
+						.attr('rx', node.data.nodeSize/4)
+						//.attr('r', node.data.nodeSize)
+						//.attr('width', node.data.nodeSize*4)
+						.attr('height', 0)
+						.attr('stroke-width','10')
+						.attr('stroke-opacity','0.5')
+						.attr('stroke-color','transparent');
+					if (!currentTheme.opaque) {rectx.attr('fill-opacity',0.3);}
+					//Circle elements NODE-CIRCLE
+					circlex = Viva.Graph.svg('circle')
+						.attr('cx', node.data.nodeSize/2)
+						.attr('cy', node.data.nodeSize/2)
+						.attr('r', node.data.nodeSize)
+						.attr('fill',node.data.nodeColor)//node.data.nodeColor)//'#4dffc3')
+						.attr('stroke-width','5')
+						.attr('stroke-opacity','0.6')
+					if (currentTheme.shadow) {circlex.attr('filter','url(#f3)');} //shadow
+					if (currentTheme.rounded) {circlex.attr('fill','url(#gradRound)');}
+					if (!currentTheme.opaque) {circlex.attr('fill-opacity',node.data.nodeOpacity);}
 
-				//MARKER: DOUBLE-DASH
-				rectx = Viva.Graph.svg('rect')
-					.attr('x', -node.data.nodeSize/2)
-					.attr('y', -node.data.nodeSize/2)
-					.attr('rx', node.data.nodeSize/4)
-					.attr('r', node.data.nodeSize)
-					.attr('width', node.data.nodeSize*2)
-					.attr('height', node.data.nodeSize*2)
-					.attr('stroke-width','10')
-					.attr('stroke-opacity','0.5')
-					.attr('stroke-color','transparent');
-				if (!currentTheme.opaque) {rectx.attr('fill-opacity',0.3);}
-				
-				//Circle elements NODE-CIRCLE
-				circleGlow = Viva.Graph.svg('circle')
-					.attr('cx', node.data.nodeSize/2)
-					.attr('cy', node.data.nodeSize/2)
-					.attr('r', node.data.nodeSize*1.7)
-					.attr('fill','transparent');//node.data.nodeColor)//'#4dffc3')
-				if (currentTheme.glow) {circleGlow.attr('fill','url(#gradGlow)');}
-				if (!currentTheme.opaque) {circleGlow.attr('fill-opacity',0.5);}
-
-				//Circle elements NODE-CIRCLE
-				circlex = Viva.Graph.svg('circle')
-					.attr('cx', node.data.nodeSize/2)
-					.attr('cy', node.data.nodeSize/2)
-					.attr('r', node.data.nodeSize)
-					.attr('fill',node.data.nodeColor)//node.data.nodeColor)//'#4dffc3')
-					.attr('stroke-width','5')
-					.attr('stroke-opacity','0.6')
-				if (currentTheme.shadow) {circlex.attr('filter','url(#f3)');} //shadow
-				if (currentTheme.rounded) {circlex.attr('fill','url(#gradRound)');}
-				if (!currentTheme.opaque) {circlex.attr('fill-opacity',node.data.nodeOpacity);}
-				//circlex.append(markerDoubleDash);
-				
-				uiSelected = Viva.Graph.svg('circle')
-					.attr('cx', node.data.nodeSize/2) //...for circle
-					.attr('cy', node.data.nodeSize/2)//...for circle
-					.attr('r', node.data.nodeSize+ node.data.nodeSize/3)//...for circle
-					.attr('fill','transparent')//'#4dffc3')
-					.attr('stroke-color','transparent')
-					.attr('stroke-opacity','0.5')
-					.attr('stroke-width',node.data.nodeSize/5);
-					if (!currentTheme.opaque) {uiSelected.attr('fill-opacity',0.2);}
 					
-
-			
-				//Text elements...
-				svgText_Data = Viva.Graph.svg('text')
-					.attr('y', 0) //node.data.nodeSize/2 + 5)
-					.attr('x', -10)// - node.data.displayLabel.length)
-					.attr('fill',currentTheme.entityLabelColor)
-					.attr('stroke-width','0')
-					.attr('font-family','Arial, Helvetica, sans-serif')
-					.attr('font-size','20')
-					.text(node.data.displayLabel);
-
-				
-				var visDefs = '<defs>';
-				visDefs += '<filter id="f3" x="0" y="0" width="200%" height="200%"><feOffset result="offOut" in="SourceAlpha" dx="20" dy="20" /><feGaussianBlur result="blurOut" in="offOut" stdDeviation="10" /><feBlend in="SourceGraphic" in2="blurOut" mode="normal" /></filter>';
-				visDefs += '<radialGradient id="gradGlow" cx="50%" cy="50%" r="50%" fx="50%" fy="50%"><stop offset="0%" style="stop-color:#ffffff; stop-opacity:1" /><stop offset="100%" style="stop-color:#66e0ff;stop-opacity:0" /></radialGradient>';
-				visDefs += '<radialGradient id="gradRound" cx="50%" cy="50%" r="50%" fx="50%" fy="50%"><stop offset="80%" style="stop-color:rgb('+node.data.nodeColorRGB.r+','+node.data.nodeColorRGB.g+','+node.data.nodeColorRGB.b+'); stop-opacity:1" /><stop offset="100%" style="stop-color:rgb('+(node.data.nodeColorRGB.r-100) +','+(node.data.nodeColorRGB.g-100)+','+(node.data.nodeColorRGB.b-100)+');stop-opacity:1" /></radialGradient>';
-				visDefs += '</defs>'; 
-				ui.innerHTML = visDefs;
-
-				UI_GLOW_INDEX = 1;
-				UI_MAIN_INDEX = 2;
-				UI_SELECTOR_INDEX = 3;
-				UI_TEXT_INDEX = 4;
-				
-				//if (currentTheme.glow){ui.append(circleGlow); UI_GLOW_INDEX++; UI_MAIN_INDEX++; UI_SELECTOR_INDEX++; UI_TEXT_INDEX++;}
-				if (currentTheme.glow){ui.append(circleGlow);} else {ui.append(Viva.Graph.svg('circle'));}
-				ui.append(circlex);
-				ui.append(uiSelected);
-				if (currentTheme.showLabels){ui.append(svgText_Data);} else {ui.append(Viva.Graph.svg('cirlce'));}
-				
-			//NODE EVENTS
-				// events (http://www.w3.org/TR/SVG/interact.html#SVGEvents ),
-				// including mouse events:
-                $(ui).click(function() { // MOUSE CLICK
-                    highlightSelectedNode(node.id);
-					layout.pinNode(node, true);
-					node.data.isPinned = true;
+					nodeBody = Viva.Graph.svg(node.data.nodeShape)
+						.attr('x', -node.data.nodeSize/2)//...for rect
+						.attr('y', -node.data.nodeSize/2)//...for rect
+						.attr('rx', node.data.nodeSize/4)//...for rect
+						.attr('width', node.data.width)//...for rect
+						.attr('height', node.data.height)//...for rect
+						.attr('cx', node.data.nodeSize/2)//...for circle
+						.attr('cy', node.data.nodeSize/2)//...for circle
+						.attr('r', node.data.nodeSize) //...for circle
+						.attr('fill',node.data.nodeColor)//node.data.nodeColor)//'#4dffc3')
+						.attr('stroke-width','5')
+						.attr('stroke-opacity','0.6')
+					if (currentTheme.shadow) {nodeBody.attr('filter','url(#f3)');} //shadow
+					if (currentTheme.rounded) {nodeBody.attr('fill','url(#gradRound)');}
+					if (!currentTheme.opaque) {nodeBody.attr('fill-opacity',node.data.nodeOpacity);}
 					
-                }),
-				$(ui).dblclick(function() { // MOUSE CLICK
-                    GetNodesForSelected();				
-                }),
-				$(ui).hover(function() { // MOUSE HOVER
-                    if (viewOptions.highlightRelated){highlightRelatedNodes(node.id, true);}
-					if (viewOptions.highlightdescendants){highlightdescendantNodes(node.id, true);}
-					if (viewOptions.highlightAncestors){highlightAncestorNodes(node.id, true);}
-                }, function() { // mouse out
-                    if (viewOptions.highlightRelated){highlightRelatedNodes(node.id, false);}
-					if (viewOptions.highlightdescendants){highlightdescendantNodes(node.id, false);}
-					if (viewOptions){highlightAncestorNodes(node.id, false);}
-                });
-				ui.attr('nodeSize',node.data.nodeSize);
+					
+					//Circle elements NODE-CIRCLE
+					circleGlow = Viva.Graph.svg('circle')
+						.attr('cx', node.data.nodeSize/2)
+						.attr('cy', node.data.nodeSize/2)
+						.attr('r', node.data.nodeSize*1.7)
+						.attr('fill','transparent');//node.data.nodeColor)//'#4dffc3')
+					if (currentTheme.glow) {circleGlow.attr('fill','url(#gradGlow)');}
+					if (!currentTheme.opaque) {circleGlow.attr('fill-opacity',0.5);}
+
+					rectblank = Viva.Graph.svg('rect')
+						.attr('width', '0')
+						.attr('height', '0');
+						
+					uiSelected = Viva.Graph.svg('circle')
+						.attr('cx', node.data.nodeSize/2) //...for circle
+						.attr('cy', node.data.nodeSize/2)//...for circle
+						.attr('r', node.data.nodeSize+ node.data.nodeSize/3)//...for circle
+						.attr('fill','transparent')//'#4dffc3')
+						.attr('stroke-color','transparent')
+						.attr('stroke-opacity','0.5')
+						.attr('stroke-width',node.data.nodeSize/5);
+						if (!currentTheme.opaque) {uiSelected.attr('fill-opacity',0.2);}
+					//Text elements...
+					svgText_Data = Viva.Graph.svg('text')
+						.attr('y', 0) //node.data.nodeSize/2 + 5)
+						.attr('x', -10)// - node.data.displayLabel.length)
+						.attr('fill',currentTheme.entityLabelColor)
+						.attr('stroke-width','0')
+						.attr('font-family','Arial, Helvetica, sans-serif')
+						.attr('font-size','20')
+						.text(node.data.displayLabel);
+					
+					textblank = Viva.Graph.svg('text')
+						.attr('font-size','0')
+						.text('');
+						
+					slideoutText = Viva.Graph.svg('text')
+						.attr('class', 'slideText')
+						.attr('y', 0) //node.data.nodeSize/2 + 5)
+						.attr('x', -10)// - node.data.displayLabel.length)
+						.attr('fill','#0077b3')
+						.attr('stroke-width','0')
+						.attr('font-family','Arial, Helvetica, sans-serif')
+						.attr('font-size','10')
+						.text('--');
+					slideoutText.innerHTML = propertyListToSvgList(node.data.properties, '<tspan x="50" dy="1.2em">', '</tspan>');
+						
+					//rectx.attr('height', 0);
+					//slideoutText.getBBox().height;
+					//console.log(slideoutText.getBBox().height);
+		   
+					var visDefs = '<defs>';
+					visDefs += '<filter id="f3" x="0" y="0" width="200%" height="200%"><feOffset result="offOut" in="SourceAlpha" dx="20" dy="20" /><feGaussianBlur result="blurOut" in="offOut" stdDeviation="10" /><feBlend in="SourceGraphic" in2="blurOut" mode="normal" /></filter>';
+					visDefs += '<radialGradient id="gradGlow" cx="50%" cy="50%" r="50%" fx="50%" fy="50%"><stop offset="0%" style="stop-color:#ffffff; stop-opacity:1" /><stop offset="100%" style="stop-color:#66e0ff;stop-opacity:0" /></radialGradient>';
+					visDefs += '<radialGradient id="gradRound" cx="50%" cy="50%" r="50%" fx="50%" fy="50%"><stop offset="80%" style="stop-color:rgb('+node.data.nodeColorRGB.r+','+node.data.nodeColorRGB.g+','+node.data.nodeColorRGB.b+'); stop-opacity:1" /><stop offset="100%" style="stop-color:rgb('+(node.data.nodeColorRGB.r-100) +','+(node.data.nodeColorRGB.g-100)+','+(node.data.nodeColorRGB.b-100)+');stop-opacity:1" /></radialGradient>';
+					visDefs += '</defs>'; 
+					ui.innerHTML = visDefs;
+
+					UI_GLOW_INDEX = 1;
+					UI_MAIN_INDEX = 2;
+					UI_SELECTOR_INDEX = 3;
+					UI_TEXT_INDEX = 4;
+					UI_POPTEXT_INDEX = 5;
+					
+					//if (currentTheme.glow){ui.append(circleGlow);} else {ui.append(Viva.Graph.svg('circle'));}
+					if (currentTheme.loadNodePopouts){ui.append(rectx);}else{ui.append(rectblank);}
+					ui.append(nodeBody);
+					ui.append(uiSelected);
+					if (currentTheme.showLabels){ui.append(svgText_Data);} else {ui.append(Viva.Graph.svg('cirlce'));}
+					if (currentTheme.loadNodePopouts){ui.append(slideoutText);}else{ui.append(textblank);}
+					
+				//NODE EVENTS
+					// events (http://www.w3.org/TR/SVG/interact.html#SVGEvents ),
+					// including mouse events:
+					$(ui).mousedown(function() { // MOUSE CLICK
+						highlightSelectedNode(node.id);
+						layout.pinNode(node, true);
+						node.data.isPinned = true;
+					}),
+					//$(ui).mousedown(function() { // MOUSE CLICK
+						//detailsUI.text = node.data.properties[0];
+						//refreshNodeAppearance(detailsUI.attr('nodeid'));				
+					//}),
+					$(ui).dblclick(function() { // MOUSE CLICK
+						GetNodesForSelected();				
+					}),
+					$(ui).hover(function() { // MOUSE HOVER
+						if (viewOptions.highlightRelated){highlightRelatedNodes(node.id, true);}
+						if (viewOptions.highlightdescendants){highlightdescendantNodes(node.id, true);}
+						if (viewOptions.highlightAncestors){highlightAncestorNodes(node.id, true);}
+					}, function() { // mouse out
+						if (viewOptions.highlightRelated){highlightRelatedNodes(node.id, false);}
+						if (viewOptions.highlightdescendants){highlightdescendantNodes(node.id, false);}
+						if (viewOptions){highlightAncestorNodes(node.id, false);}
+					});
+					ui.attr('class','node');
+					ui.attr('nodeSize',node.data.nodeSize);
+					ui.attr('nodeid',node.id);
+				}
+				else if (node.data.nodeType == 'window')
+				//====== WINDOW NODES ========================================================================================================
+				{
+					/*
+					//Circle elements NODE-CIRCLE
+					circleGlow = Viva.Graph.svg('rect')
+						.attr('x', -node.data.nodeSize *1.5)//...for rect
+						.attr('y', -node.data.nodeSize*1.5)//...for rect
+						.attr('width', node.data.width)//...for rect
+						.attr('height', node.data.height)//...for rect
+						.attr('fill','transparent')//node.data.nodeColor)//'#4dffc3')
+						.attr('fill','url(#gradGlow)');
+
+					windowBody = Viva.Graph.svg('rect')
+						.attr('x', -node.data.nodeSize *1.5)//...for rect
+						.attr('y', -node.data.nodeSize*1.5)//...for rect
+						.attr('rx', node.data.nodeSize/4)//...for rect
+						.attr('width', node.data.width)//...for rect
+						.attr('height', node.data.height)//...for rect
+						.attr('stroke-width','5')
+						.attr('stroke-opacity','1')
+						.attr('stroke-color','white')
+					
+					windowSelected = Viva.Graph.svg('rect')
+						.attr('width','0')
+						.attr('height','0');
+						
+					//Text elements...
+					windowText = Viva.Graph.svg('text')
+						.attr('y', -30) //node.data.nodeSize/2 + 5)
+						.attr('x', node.data.nodeSize)// - node.data.displayLabel.length)
+						.attr('fill','deepskyblue')
+						.attr('stroke-width','0')
+						.attr('font-family','Arial, Helvetica, sans-serif')
+						.attr('font-size','10')
+						.text(node.data.displayLabel);
+
+					$(ui).click(function() { // MOUSE CLICK				
+						//highlightSelectedNode(node.id);
+						//layout.pinNode(node, true);
+						//node.data.isPinned = true;
+						
+					}),
+					ui.append(circleGlow);
+					ui.append(windowBody);
+					ui.append(windowSelected);
+					ui.append(windowText);
+					//ui.attr('id','NodeWindowX')
+					ui.attr('id', node.id)
+					//ui.attr('class','nodeWindow2');
+					ui.attr('position', 'absolute');
+					*/
+				}
 				
+				ui.attr('nodetype',node.data.nodeType);
 				
                 return ui;
             });
 			
-			//NODE DRAWING/RENDERING ...occurs continuously
+			//====== NODE DRAWING/RENDERING ...occurs continuously ========================================================================================================
 			graphics.placeNode(function(nodeUI, pos) {
                 //nodeUI.attr('x', pos.x - nodeSize / 2).attr('y', pos.y - nodeSize / 2);
 				var nodesize = nodeUI.attr('nodeSize');
-				//console.log(nodeUI);
-				nodeUI.attr('transform','translate(' +(pos.x - nodesize/2) + ',' + (pos.y - nodesize/2) + ')');
+				var nodeid = nodeUI.attr('nodeid');
+				var nodetype = nodeUI.attr('nodetype');
+				
+				if (nodetype != 'window'){
+					nodeUI.attr('transform','translate(' +(pos.x - nodesize/2) + ',' + (pos.y - nodesize/2) + ')');
+				}
+				if (nodeid == selectedNodeID)
+				{					
+					//detailsUI.attr('transform','translate(' +(pos.x) + ',' + (pos.y) + ')');
+				}
             });
 
 			//====== LINKS ========================================================================================================
@@ -1542,13 +1844,15 @@
 			
 			//LINKS SETUP (occurs once for every link...)
             graphics.link(function(link){ //...get called for every link
-				var linklabelId = 'link'+link.fromId + 'To' + link.toId;
-				//**************************************************
 				
+				
+				var linklabelId = 'link'+link.fromId + 'To' + link.toId;
+				//**************************************************		
 				if (currentTheme.showRelationships == "all" || currentTheme.showRelationships == "on-highlight")
 				{
 					//MARKER: TEXT
 					var markerText = Viva.Graph.svg('marker')
+						.attr('class', 'markertextmain')
 						.attr('id', linklabelId )
 						.attr('viewBox', "-4 -6 8 12")
 						.attr('refX', "3")
@@ -1557,29 +1861,47 @@
 						.attr('markerHeight', "100")
 						.attr('markerUnits', "userSpaceOnUse")
 						.attr('orient', "auto");
-					if (currentTheme.showRelationships == "on-highlight") {
-						//console.log("CHECK");
-						//markerText.attr('fill-opacity','0')
-					}
-					var markertext1 = Viva.Graph.svg('text')
+
+					
+					var markerLabel = Viva.Graph.svg('text')
+							.attr('class','markertextlabel')
 							.attr('x', '0')
 							.attr('y', '0')
 							.attr('fill','silver')
 							.attr('font-family','Arial, Helvetica, sans-serif')
 							.attr('font-size','1.5')
-							.text(link.data);
+							.text(link.data.name);
+					if (currentTheme.showRelationships == "on-highlight") {markerLabel.attr('fill','transparent')}
 					
-					markerText.append(markertext1);
+					//var propertyList = link.data.properties.forEach(function(prop){var x = ''; prop})
+					var markerProperties = Viva.Graph.svg('text')
+							.attr('class','markertextsub')
+							.attr('x', '0')
+							.attr('y', '.5')
+							.attr('fill','silver')
+							.attr('font-family','Arial, Helvetica, sans-serif')
+							.attr('font-size','1')
+							.text('');
+					markerProperties.innerHTML = propertyListToSvgList(link.data.properties, '<tspan x="0" dy="1.2em">', '</tspan>');
+					
+					markerText.append(markerLabel);
+					if (currentTheme.showRelationProperties == "inline"){markerText.append(markerProperties);}
 					var defs = graphics.getSvgRoot().append('defs');
 					defs.append(markerText);
+					link.data.markerUI = markerText;
 				}
 				//**************************************************
 				
 				var linkPath;
-				linkPath = Viva.Graph.svg('path')
+				var group = Viva.Graph.svg('g')
+				.attr('class','link');
+				
+				
+				var linkPath = Viva.Graph.svg('path')
+						   .attr('class','linkpath')
                            .attr('id',linklabelId)
 						   .attr('stroke', currentTheme.linkColor)
-                           .attr('stroke-width', '3')
+                           //.attr('stroke-width', '3')
 						   .attr('marker-mid', 'url(#' + linklabelId + ')')
 						   .attr('marker-end', 'url(#Triangle)')
 						   //.attr('marker-start', 'url(#DoubleDash)')
@@ -1587,15 +1909,69 @@
 						   //.attr('marker-segment', 'url(#TextMark)');
 						   .attr("fill", 'transparent');
 						   if (!currentTheme.opaque) {linkPath.attr('stroke-opacity', 0.5);}
+
+						   
+				var linkText = Viva.Graph.svg('text')
+							.attr('class','linktext')
+							.attr('x',0)
+							.attr('y',0)
+							.attr('fill','#EB6A00')
+							.attr('refx', '25')
+							.attr('refy', '0')
+							.attr('stroke-width', '1')
+							.attr('font-family','Arial, Helvetica, sans-serif')
+							.attr('font-size','10')
+							.text('');
 				
+				
+				var textwidth = 0;
+				var proplist = ''; 
+				link.data.properties.forEach(function(prop){
+						linkText.innerHTML += '<tspan dx="-' + textwidth + 'em" dy="1.5em" >' + prop.key + ": " + prop.value+  '</tspan>';
+						textwidth = 5;
+						console.log(linkText.attr('dx'));
+				});
+				
+				var linkRect = Viva.Graph.svg('rect')
+							.attr('class','linkrect')
+							.attr('refx', '30')
+							.attr('width', '150')
+							.attr('height', '25')
+							.attr('fill','black')
+							.attr('rx','5');
+				//linkRect.attr('refy', Number(linkRect.attr('width'))/2 );
+				
+				//linkText.attr('refy', Number(linkRect.attr('width'))/2 );
+				
+				//linkPath.innerHTML += '<text font-family="Verdana" font-size="42.5"><textPath xlink:href="#'+linklabelId+'">HELLO</textPath></text>';
 				//linkPath.append('defs');
 				
+				group.append(linkPath);
+				if (currentTheme.loadRelationPopouts)
+				{
+					group.append(linkRect);
+					group.append(linkText);
+				}
 				
-				return linkPath;   
+				$(linkPath).hover(function() { // MOUSE HOVER
+					//markerLabel.attr('fill', 'yellow');
+					//console.log('link hover in');
+				}, function() { // mouse out
+					//markerLabel.attr('fill', 'red');
+					//console.log('link hover out');
+				});
+					
+				
+				//linkPath.append(group);
+				console.log(group)
+				//linkPath.append(rectx);
+				//linkPath.attr('class','link');
+				
+				return group;   
             })
 			
 			//LINKS DRAWING/RENDERING (occurs continuously for every link...)
-			var geom = Viva.Graph.geom();
+			//var geom = Viva.Graph.geom();
 			graphics.placeLink(function(linkUI, fromPos, toPos) {
                 // Here we should take care about
                 //  "Links should start/stop at node's bounding box, not at the node center."
@@ -1605,46 +1981,66 @@
 				
 				var fromNodeID = linkUI.attr('fromNode');
 				var toNodeID = linkUI.attr('toNode');
+				var linkDataId = linkUI.attr('linkDataId');
+				var linkIndex = linkUI.attr('linkIndex');
 				//var linkTextID = 'link.' + fromNodeID + '.' + toNodeID; //*****TEST
-				//linkUI.innerHTML += '<text font-family="Verdana" font-size="42.5"><textPath xlink:href="#'+'link.'+fromNodeID + '.' + toNodeID+'">HELLO</textPath></text>';
+				
 				var fromNode =GRAPH.getNode(fromNodeID);
 				var toNode =GRAPH.getNode(toNodeID);
 				toNodeSize = toNode.data.nodeSize;
 				fromNodeSize = fromNode.data.nodeSize;
-				
+
 				var toNodeSize = nodeSize * 2,
                     fromNodeSize = nodeSize * 2;
 				
 				toNodeSize = toNode.data.nodeSize * 2;
 				fromNodeSize = fromNode.data.nodeSize * 2;
-				
-                var from = geom.intersectRect(
-                        // rectangle:
-                                fromPos.x - fromNodeSize / 2, // left
-                                fromPos.y - fromNodeSize / 2, // top
-                                fromPos.x + fromNodeSize / 2, // right
-                                fromPos.y + fromNodeSize / 2, // bottom
-                        // segment:
-                                fromPos.x, fromPos.y, toPos.x, toPos.y)
-                           || fromPos; // if no intersection found - return center of the node
-
-                var to = geom.intersectRect(
-                        // rectangle:
-                                toPos.x - toNodeSize / 2, // left
-                                toPos.y - toNodeSize / 2, // top
-                                toPos.x + toNodeSize / 2, // right
-                                toPos.y + toNodeSize / 2, // bottom
-                        // segment:
-                                toPos.x, toPos.y, fromPos.x, fromPos.y)
-                            || toPos; // if no intersection found - return center of the node
 
 				from = fromPos;
 				to = toPos;
-				var curvex = from.x + (to.x - from.x)/2;
-				var curvey = from.y + (to.y - from.y)/2;
-				var data = 'M '+from.x+' '+from.y+' L '+curvex + ' '+curvey + ' L '+to.x + ','+to.y;
-				linkUI.attr("d", data);
-				//linkUI.attr('transform','translate(' +(pos.x - nodesize/2) + ',' + (pos.y - nodesize/2) + ')');
+
+				to.x = to.x - from.x;
+				to.y = to.y - from.y;
+
+				var skew = (linkIndex) *20 *(((linkIndex)%2 == 0)?-1:1); //...creates a bend in the middle for multiple relationships
+				//var curvex = from.x + (to.x - from.x)/2; //...the middle point x
+				//var curvey = from.y + (to.y - from.y)/2 + skew;//...the middle point y
+				var curvex = (to.x)/2; //...the middle point x
+				var curvey = (to.y)/2 + skew;//...the middle point y
+				linkUI.attr('transform','translate(' +fromPos.x + ',' + fromPos.y + ')');
+				
+				var linkPath = linkUI.children[0];
+				for (var i = 0; i < linkUI.children.length; i++)
+				{
+					var child = linkUI.children[i];
+					//console.log(child);
+					if (!child) continue;
+					if (!child.attr) continue;
+					if (!child.attr('refx')) continue;
+					child.attr('x',curvex - child.attr('refx'));
+					child.attr('y',curvey - child.attr('refy'));
+					for (var h = 0; h < child.children.length; h++)
+					{
+						
+						if (!child.children[h]) continue;
+						//if (!child.children[h].attr) continue;
+						//console.log(child.children[h]);
+						//if (!child.children[h].attr('x')) continue;
+						//child.children[h].attr('x', curvex);
+					}
+				}
+				//linkUI.children.forEach(function (child){ 
+				//	if (child.attr('refx'))
+				//	{
+				//		child.attr('x',to.x - Number(child.attr('refx')));
+				//		child.attr('y',to.y - Number(child.attr('refy')));
+				//	}
+				//})
+				//var data = 'M '+from.x+' '+from.y+' L '+curvex + ' '+curvey + ' L '+to.x + ','+to.y;
+				var data = 'M '+0+' '+0+' L '+curvex + ' '+curvey + ' L '+to.x + ','+to.y;
+				//linkUI.attr("d", data);
+				linkPath.attr("d", data);			
+
             });
 			//==============================================================================================================
 
@@ -1672,20 +2068,18 @@
             //});
 			
 			GRAPH = graph;
-				
             renderer.run();
-			//renderer2.run();
-//=====================================================================================================================================================================================
-			//connectUser();
-			//Neo4j_InitAllNodes();
-			//startupLabels.forEach(function(label){
-			//		Neo4j_GetNodesByLabel(label);
-			//});
+//========== STARTUP SETTINGS ===========================================================================================================================================================================
 			document.getElementById('graphContainer').style.background=currentTheme.graphBackground;
+			//detailsUI = addWindowNode();
 			
-			
+//=========== ANIMATION ==========================================================================================================================================================================
+		
+				
+		
 //=====================================================================================================================================================================================
-        }
+   
+		}
     </script>
 
     <style type="text/css" media="screen">
@@ -1706,6 +2100,140 @@
 			margin: 0px;
 			float:left;
 		}
+
+		//.nodeWindow2{
+		//	opacity:0.1;
+		//}
+		//.nodeWindow2:hover{
+		//	opacity:1
+		//	-webkit-animation: fadein .5s 1;
+		//	animation: fadein .5s 1;
+		//}
+		//.nodeWindow2:hover{
+		//	opacity:1
+		//	-webkit-animation: fadein .5s 1;
+		//	animation: fadein .5s 1;
+		//}
+		///* Chrome, Safari, Opera */
+		//@-webkit-keyframes fadein {
+		//	from {opacity: .1;}
+		//	to {opacity: 1;}
+		//}
+		//@keyframes fadein {
+		//	from {opacity: .1;}
+		//	to {opacity: 1;}
+		//}
+
+		.node{
+			opacity.5;
+		}
+		
+		.node rect{
+			width:0px;
+			transition: width 0.2s linear;
+		}
+		.slideText{
+			opacity:0;
+			transition: opacity 0.2s linear;
+		}	
+		.node:hover rect{
+			width:150px;
+			transition: width 0.2s linear;
+		}
+		.node:hover text.slideText{
+			opacity:1;
+			transition: opacity 0.2s linear;
+		}
+		
+		.link{
+			//fill:red;
+			//transition: fill 0.2s linear;
+		}
+		
+		.link text{
+			opacity:0;
+			transition: opacity 0.2s linear;
+		}
+		.link rect{
+			opacity:0;
+			transition: opacity 0.2s linear;
+		}
+		.link:hover text{
+			opacity:1;
+			transition: width opacity 0.2s linear;
+		}
+		.showText{
+			opacity:1;
+		}
+		
+		.link rect{
+			opacity:.5;
+			width:150px;
+			height:0px;
+			transition: width 0.2s linear;
+		}
+		.link:hover rect{
+			//opacity:.5;
+			height:50px;
+			//width:100px;
+			transition: height 0.2s linear;
+		}
+		
+		.linkpath{
+			//fill:transparent;
+			stroke-width:3;
+			//transition: stroke-width 0.2s linear;
+		}
+		.linkpath:hover{
+			stroke-width:10;
+			//color:red;
+			transition: color stroke-width 0.2s linear;
+		}
+		.linktext{
+			//font-size:10;
+			//fill:gray;
+			//opacity:.5;
+			//transition: size color opacity 0.2s linear;
+		}
+		.linktext:hover{
+			//font-size:20;
+			//fill:red;
+			//opacity:1;
+			//transition: size color opacity 0.2s linear;
+		}
+		
+		
+		//.markertextmain {
+		//	opacity:1;
+		//	fill:blue;
+		//}
+		//.markertextmain:hover markertextsub{
+		//	opacity:1;
+		//	fill:blue;
+		//}
+		.markertextsub{
+			opacity:1;
+			fill:#FA553E;
+		}
+		.markertextlabel{
+			opacity:1;
+			//fill:blue;
+		}
+		
+
+
+		#DetailsWindow {
+			//opacity:0;
+			//transition: opacity 0.2s linear;
+		}
+		//#DetailsWindow:hover {
+			//opacity: 0.5;
+			//transition: opacity 0.2s linear;
+		//}
+
+
+
+
 		.label {
 			font-size: 12px;
 			font-family: Verdana;
@@ -1733,7 +2261,7 @@
 			overflow: auto;
 		  }
 		  
-		  #toolPanel {
+		  .toolPanel {
 			width:200px;
 			margin:5px;
 			margin-left:5px;
@@ -1784,7 +2312,7 @@
 			margin:0px;
 			padding:0px;
 			border-width:0px;
-			//overflow: auto;
+			overflow: auto;
 			position: fixed;
 		  }
 		  
@@ -1974,53 +2502,89 @@ select {
 	</div>
 	
 	<div id='leftColumn'>
-		<div id='toolPanel' class="labelDisplay" style='overflow:auto;'>
+		<div class="labelDisplay toolPanel" style='overflow:auto;'>
 			<span id="availableLabels" class="label"></span>
 		</div>
 		
-		<div id='toolPanel'>
-			<div id='newNode'>
-			  <div class="panelheader">View Options:</div>
-			  <input class="check" id="vo.hr" onclick="updateViewOptions()" type="checkbox" name="related" value="" checked="true"> Highlight Related<br>
-			  <input class="check" id="vo.ha" onclick="updateViewOptions()" type="checkbox" name="ancestors" value=""> Highlight Ancestors<br>
-			  <input class="check" id="vo.hd" onclick="updateViewOptions()" type="checkbox" name="descendants" value=""> Highlight Descendants<br>
+		<div class='toolPanel'>
+			<div id='selectedNode'></div>
+		</div>
+		
+		<div class='toolPanel'>
+			<div id='nodeDetails'>
 			</div>
 		</div>
-	
-		<div id='toolPanel'>
-			<div id='newNode'>
-			  <div class="panelheader">Selection Options:</div>
-			  <input class="check" id="vo.ch" onclick="updateInteractionOptions()" type="checkbox" name="descendants" value=""> Multi Select<br>
-			</div>
+		
+				<div class='toolPanel'>		
+
+			<div class="panelheader">Build Query:</div> 
+			<table>
+			<tr>
+				<td>from entity:</td>
+				<td>
+					<select onchange="qbuilder('qbuilder.from.entity')" id="qbuilder.from.entity">
+					</select>
+				</td>
+			</tr>
+			<tr >
+				<td>where:</td>
+				<td>
+				<select  onchange="qbuilder('qbuilder.from.property')" id="qbuilder.from.property">
+				</select>
+				</td>
+			</tr>
+			<tr>
+				<td>is:</td>
+				<td>
+					<input onchange="qbuilder('qbuilder.from.value')" id="qbuilder.from.value"></input>
+					
+				</td>
+			</tr>
+			<tr>
+				<td>to entity:</td>
+				<td>
+					<select onchange="qbuilder('qbuilder.to.entity')" id="qbuilder.to.entity">
+					</select>
+				</td>
+			</tr>
+			<tr >
+				<td>where:</td>
+				<td>
+				<select onchange="qbuilder('qbuilder.to.property')" id="qbuilder.to.property">
+				</select>
+				</td>
+			</tr>
+			<tr>
+				<td>is:</td>
+				<td>
+					<input onchange="qbuilder('qbuilder.to.value')" id="qbuilder.to.from.value"></input>
+				</td>
+			</tr>
+			</table>
+			<button onclick='querySearch()'>Search</button>
 		</div>
+
 	</div>
 	
 	
 	<div id='rightColumn'>
 	
-		<div id='toolPanel'>
-			<div id='selectedNode'></div>
-		</div>
+
 		
-		<div id='toolPanel'>
-			<div id='nodeDetails'>
-			</div>
-		</div>
-		
-		<div id='toolPanel'>
+		<div class='toolPanel'>
 			<div id='newNode'>
 			  <div class="panelheader">Data entity:</div>
 			  <input id="newNodeData" type="text" name="lname">
 			  <button onclick='createNode()'>Add Entity</button>
 			</div>
 		</div>
-		<div id='toolPanel'>		
+		<div class='toolPanel'>		
 			<div class="panelheader">Update selected entity:</div> 
 			<input id='log' value=''></input>
 			<button onclick='addLabel()'>Add Label</button>
 		</div>
 		
-		<div id='toolPanel'>		
+		<div class='toolPanel'>		
 
 			<div class="panelheader">Add/Update Property:</div> 
 			<table>
@@ -2046,14 +2610,17 @@ select {
 			<button onclick='addPropertyToAll()'>All</button>
 		</div>
 		
-		<div id='toolPanel'>
+
+		
+		
+		<div class='toolPanel'>
 			<div>
 				<button onclick='relateSelectedToNode()'>Relate entity</button>
 				<button onclick='deleteNode()'>Delete entity</button>
 			</div>
 		</div>
 		
-		<div id='toolPanel'>
+		<div class='toolPanel'>
 			<div> 
 				<div class="panelheader">Bulk</div>
 				<button onclick='Neo4j_InitAllNodes()'>Fetch All</button>
@@ -2063,7 +2630,7 @@ select {
 		</div>
 	
 
-		<div id='toolPanel'>
+		<div class='toolPanel' id='panelAppearance'>
 			<div class="panelheader">Appearance</div>
 			<button class="popup">Node
 				<div class="popuptext">
@@ -2071,19 +2638,22 @@ select {
 					<div id="hovertext" onclick='decreaseNodeSize()'>Shrink</div>
 					<div id="hovertext" onclick='unPinNode()'>Unpin</div>	
 					<div id="hovertext" onclick='refreshNodeAppearance()'>Refresh Visual</div>
+					<div id="hovertext" onclick='increaseNodeMass()'>Increase Mass</div>
+					<div id="hovertext" onclick='increaseNodeSprings()'>Increase Spring</div>
 				</div>
 			</button>
 			
 			<button class="popup">Font
 				<div class="popuptext">
 						<div id="hovertext" onclick='fontGrow()'>Grow</div>
+						
 						<div id="hovertext" onclick='fontShrink()'>Shrink</div>
 						<div id="hovertext" onclick='fontUp()'>Move Up</div>
 						<div id="hovertext" onclick='fontDown()'>Move Down</div>
 				</div>
 			</button>
 		</div>
-		<div id='toolPanel'>	
+		<div class='toolPanel' id='panelData'>	
 			<div class="panelheader">Data</div>
 			<input id="nodeLabel" type="text" name="lname">
 			<button onclick='getEntityNode()'>Get Entity</button>
@@ -2091,8 +2661,23 @@ select {
 			
 		</div>
 		
-
-		
+		<div class='toolPanel' id='panelViewOptions'>
+			<div id='newNode'>
+			  <div class="panelheader">View Options:</div>
+			  <form action="">
+			  <input class="check" id="vo.hr" onclick="updateViewOptions()" type="radio" name="related" value="" checked="true"> Highlight Related<br>
+			  <input class="check" id="vo.ha" onclick="updateViewOptions()" type="radio" name="related" value=""> Highlight Ancestors<br>
+			  <input class="check" id="vo.hd" onclick="updateViewOptions()" type="radio" name="related" value=""> Highlight Descendants<br>
+			  </form>
+			</div>
+		</div>
+	
+		<div class='toolPanel' id='panelSelectionOptions'>
+			<div id='newNode'>
+			  <div class="panelheader">Selection Options:</div>
+			  <input class="check" id="vo.ch" onclick="updateInteractionOptions()" type="checkbox" name="descendants" value=""> Multi Select<br>
+			</div>
+		</div>
 
 		
 
@@ -2101,7 +2686,11 @@ select {
 	
 	</div>
 	
-
+	<div id="nodeOptions">
+		<button onclick='relateSelectedToNode()'>Relate entity</button>
+		<button onclick='deleteNode()'>Delete entity</button>
+	</div>
+			
 
 </body>
 

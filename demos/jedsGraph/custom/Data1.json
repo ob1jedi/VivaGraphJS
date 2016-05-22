@@ -18,18 +18,23 @@ var jsonObject = {
 			{"forLabel":"Movie", "displayField":"title"}
 		]
 	},
-	"viewoptions":{},	
+	"viewOptions":{
+		"panels":[
+			{"name":"panelSelectionOptions", "parent":"leftColumn", "visible":true}
+		]
+	
+	},	
 	"displaySettings":{
 			"usePrebuiltTheme":false, /* set to false to use the settings in this file instead(below)*/
 			"prebuiltThemeIndex":3,
 			/*The 4bit rgb range from which label colors can be automatically generated.*/
 			"entityRgbRange":{"min":40,"max":140},
-			"showRelationships":"all", //TODO: need to implement "on-highlight"
+			"showRelationships":"all",
 			/*showRelationships: "all/on-highlight/none" */
+			"showRelationProperties": "inline",
 			"showLabels":true,
 			"graphBackground":"#0e1a25",
 			"entityLabelColor":"white",
-			"entityShape":"rect",
 			"opaque":false,
 			/*choices: 
 				rect (entities are rectangular)
@@ -44,8 +49,9 @@ var jsonObject = {
 			"shadow":false, /*...outer node shadow*/
 			"glow":false, /*...outer node glow*/
 			"linkColor":"#21415f", /*...html/hex color*/
-			"rounded":false /*...inner node shadow*/
-			
+			"rounded":false, /*...inner node shadow*/
+			"loadRelationPopouts":false,
+			"loadNodePopouts":true
 		}
 	}
 }
