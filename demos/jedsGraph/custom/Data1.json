@@ -7,10 +7,8 @@ var jsonObject = {
 		},
 	"startupOptions":{
 		"startupSearch":[
-			{"label":"ROOT"},
-			{"label":"SCHEMA_ROOT"},
-			{"label":"Test4"},
-			{"label":"HELLO"}
+			{"label":"SOME_LABEL"},
+			{"label":"SOME_LABEL2"}
 		],
 		"nodeDisplayValues":[
 			{"forLabel":"Test4", "displayField":"Active"},

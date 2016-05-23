@@ -331,8 +331,8 @@
 						var qbuilderToEntitySelector = document.getElementById('qbuilder.to.entity');
 						var LabelsDiv = document.getElementById('availableLabels');
 						LabelsDiv.innerHTML = '';
-						qbuilderFromEntitySelector.innerHTML = '';
-						qbuilderToEntitySelector.innerHTML = '';
+						qbuilderFromEntitySelector.innerHTML = '<option value=""></option>';
+						//qbuilderToEntitySelector.innerHTML = '';
 						labelsList.forEach(function(label,index){
 							var color = 'gray';
 							//if (refonly) {color = 'darkgray';}
@@ -342,7 +342,7 @@
 								'<div onclick="highlightLabel('+index+')" id="labelPanel" style="background-color:'+color+';">' + label.name + fetchButton
 								'</div>';
 							qbuilderFromEntitySelector.innerHTML += '<option value="'+label.name+'">' +label.name+ '</option>';
-							qbuilderToEntitySelector.innerHTML += '<option value="'+label.name+'">' +label.name+ '</option>';
+							//qbuilderToEntitySelector.innerHTML += '<option value="'+label.name+'">' +label.name+ '</option>';
 						});
 						
 			return newDataLabel;
@@ -412,6 +412,7 @@
 		
 		function Neo4j_extractProperties(nodesResult) //extract properties from a collection of nodes, from a cypher node search
 		{
+			
 			for (var i = 0; i < nodesResult.results.length; i++){		
 				var result = nodesResult.results[i];
 				for (var d = 0; d < result.data.length; d++){
@@ -421,30 +422,81 @@
 			}
 			return;
 		}
+		function Neo4j_extractValues(nodesResult) //extract properties from a collection of nodes, from a cypher node search
+		{
+			//console.log(nodesResult);
+			var valueList = [];
+			for (var i = 0; i < nodesResult.results.length; i++){		
+				var result = nodesResult.results[i];
+				for (var d = 0; d < result.data.length; d++){
+					var row = result.data[d].row;
+					//console.log(row[0]);
+					valueList.push(row[0]);
+				}
+			}
+			return valueList;
+		}
 		
 		function qbuilder(selectType)
 		{
-			if (selectType == 'qbuilder.from.entity' || selectType == 'qbuilder.to.entity'){
+			var scope = selectType.split('.');
+			if (scope[2] == 'entity'){
 				//get properties...
-				var propElementName;
-				if (selectType == 'qbuilder.from.entity') {propElementName = 'qbuilder.from.property'}
-				else if (selectType == 'qbuilder.to.entity') {propElementName = 'qbuilder.to.property'}
+				var childElementName = 'qbuilder.'+scope[1]+'.property';
+				var propertyElement = document.getElementById(childElementName);
+				propertyElement.innerHTML = '<option value=""></option>';
+				document.getElementById('qbuilder.'+scope[1]+'.value').innerHTML = '<option value=""></option>';
+				
 				var selectedTypeValue = document.getElementById(selectType).value;
 				var command = "MATCH (n:"+selectedTypeValue+") return n";
 				var callback = function(nodesResult){
-					var propertList = Neo4j_extractProperties(nodesResult)
-					var propertyElement = document.getElementById(propElementName);
-					propertyElement.innerHTML = '';
-					propertList.forEach(function(prop){
+					var propertyList = Neo4j_extractProperties(nodesResult)
+					
+					
+					propertyList.forEach(function(prop){
 						propertyElement.innerHTML += '<option value="'+prop.key+'">' + prop.key + '</option>';
 					});
 				};
 				Neo4j_Command([command], callback);
 			}
-			
+			if (scope[2] == 'property'){
+				var childElementName = 'qbuilder.'+scope[1]+'.value';
+				var selectedEntity = document.getElementById('qbuilder.'+scope[1]+'.entity').value;
+				var selectedProperty = document.getElementById('qbuilder.'+scope[1]+'.property').value;
+				childElementName.innerHTML = '<option value=""></option>';
+				
+				if (!selectedProperty){ return;}
+				var command = "MATCH (n:"+selectedEntity+") return distinct n." + selectedProperty;
+				var callback = function(nodesResult){
+					var valueList = Neo4j_extractValues(nodesResult)
+					var valueElement = document.getElementById(childElementName);
+					valueElement.innerHTML = '<option value=""></option>';
+					valueList.forEach(function(prop){
+						valueElement.innerHTML += '<option value="'+prop+'">' + prop + '</option>';
+					});
+				};
+				Neo4j_Command([command], callback);
+			}
 		}
 		
+		function querySimpleSearch()
+		{
+			var fromEntity = document.getElementById('qbuilder.from.entity').value;
+			var fromProperty = document.getElementById('qbuilder.from.property').value;
+			var fromValue = document.getElementById('qbuilder.from.value').value;
+			
+			var command = 'MATCH (n:'+fromEntity+'*{'+fromProperty+':"'+fromValue+'"}) RETURN id(n), labels(n), n';
+			console.log(command);
+			var callback = function(nodesResult){addSingleNodesFromResults(nodesResult)};
+			Neo4j_Command([command], callback);
+			
+			var command = 'MATCH (n:'+fromEntity+'{'+fromProperty+':"'+fromValue+'"})-[r]-(m) RETURN id(n), labels(n), n , id(r), type(r), r, id(m), labels(m), m';
+			var callback = function(nodesResult){addNodesFromResults(nodesResult)};
+			Neo4j_Command([command], callback);
+
+		}
 		
+		/*
 		function querySearch()
 		{
 			var fromEntity = document.getElementById('qbuilder.from.entity').value;
@@ -454,12 +506,14 @@
 			var toProperty = document.getElementById('qbuilder.to.property').value;
 			var toValue = document.getElementById('qbuilder.to.value').value;
 			
-			var command = 'MATCH (n:'+fromEntity+'{'+fromProperty+':"'+fromValue+'"})-[r*]-(m:'+toEntity+'{'+toProperty+':"'+toValue+'"}) RETURN id(n), id(m), id(r), type(r), r';
+			var command = 'MATCH (n:'+fromEntity+'{'+fromProperty+':"'+fromValue+'"})-[r]-(m:'+toEntity+'{'+toProperty+':"'+toValue+'"}) RETURN id(n), labels(n), n , id(r), type(r), r, id(m), labels(m), m';
 			var callback = function(nodesResult){
+				
 				addNodesFromResults(nodesResult)
 			};
 			Neo4j_Command([command], callback);
 		}
+		*/
 		
 		function addNodesFromResults(nodesResults)
 		{
@@ -468,24 +522,73 @@
 				var result = nodesResults.results[i];
 				for (var d = 0; d < result.data.length; d++){
 					var row = result.data[d].row;
+					
+					console.log(row);
+					var I_N_ID = 0;
+					var I_N_LABELS = 1;
+					var I_N_PROPS = 2;
+					var I_R_ID = 3;
+					var I_R_LABELS = 4;
+					var I_R_PROPS = 5;
+					var I_M_ID = 6;
+					var I_M_LABELS = 7;
+					var I_M_PROPS = 8;
+					
+					//Node N...
 					var dat = new datax;
-					dat.id =row[1];
-					if (row[2]){dat.labels = row[2];}
-					if (row[3]){dat.properties = new neoPropertyList(row[3]);}
-					var node = addDataNode(row[1], dat);
-					if (!GRAPH.getNode(row[1])){
-						var pos = layout.getNodePosition(row[0]);
-						layout.setNodePosition(row[1], pos.x, pos.y);
+					dat.id =row[I_N_ID];
+					if (row[I_N_LABELS]){dat.labels = row[I_N_LABELS];}
+					if (row[I_N_PROPS]){dat.properties = new neoPropertyList(row[I_N_PROPS]);}
+					var node = addDataNode(row[I_N_ID], dat);
+					if (!GRAPH.getNode(row[I_N_ID])){
+						var pos = layout.getNodePosition(row[I_N_ID]);
+						layout.setNodePosition(row[I_N_ID], pos.x, pos.y);
 					}
-					if (!getDataLink(row[0], row[1], row[4]))
+					//Node M...
+					var dat = new datax;
+					dat.id =row[I_M_ID];
+					if (row[I_M_LABELS]){dat.labels = row[I_M_LABELS];}
+					if (row[I_M_PROPS]){dat.properties = new neoPropertyList(row[I_M_PROPS]);}
+					var node = addDataNode(row[I_M_ID], dat);
+					if (!GRAPH.getNode(row[I_M_ID])){
+						var pos = layout.getNodePosition(row[I_M_ID]);
+						layout.setNodePosition(row[I_M_ID], pos.x, pos.y);
+					}
+					
+					//Link N->M...
+					if (!getDataLink(row[I_N_ID], row[I_M_ID], row[I_R_ID]))
 					{
 						var linkdata = new datay();
-						linkdata.id = row[4];
-						linkdata.name = row[5];
-						linkdata.properties = new neoPropertyList(row[6]);
-						addDataLink(row[0], row[1], linkdata);
+						linkdata.id = row[I_R_ID];
+						linkdata.name = row[I_R_LABELS];
+						linkdata.properties = new neoPropertyList(row[I_R_PROPS]);
+						addDataLink(row[I_N_ID], row[I_M_ID], linkdata);
 					}
 					//fixTextWidth();
+				}
+			}
+		}
+		
+		function addSingleNodesFromResults(nodesResults)
+		{
+			for (var i = 0; i < nodesResults.results.length; i++){
+				
+				var result = nodesResults.results[i];
+				for (var d = 0; d < result.data.length; d++){
+					var row = result.data[d].row;
+					var I_N_ID = 0;
+					var I_N_LABELS = 1;
+					var I_N_PROPS = 2;
+					//Node N...
+					var dat = new datax;
+					dat.id =row[I_N_ID];
+					if (row[I_N_LABELS]){dat.labels = row[I_N_LABELS];}
+					if (row[I_N_PROPS]){dat.properties = new neoPropertyList(row[I_N_PROPS]);}
+					var node = addDataNode(row[I_N_ID], dat);
+					if (!GRAPH.getNode(row[I_N_ID])){
+						var pos = layout.getNodePosition(row[I_N_ID]);
+						layout.setNodePosition(row[I_N_ID], pos.x, pos.y);
+					}
 				}
 			}
 		}
@@ -2529,18 +2632,20 @@ select {
 			<tr >
 				<td>where:</td>
 				<td>
-				<select  onchange="qbuilder('qbuilder.from.property')" id="qbuilder.from.property">
-				</select>
+				<select  onchange="qbuilder('qbuilder.from.property')" id="qbuilder.from.property"></select>
 				</td>
 			</tr>
 			<tr>
 				<td>is:</td>
 				<td>
-					<input onchange="qbuilder('qbuilder.from.value')" id="qbuilder.from.value"></input>
+					<select onchange="qbuilder('qbuilder.from.value')" id="qbuilder.from.value"></select>
 					
 				</td>
 			</tr>
-			<tr>
+			
+				
+			
+			<!--tr>
 				<td>to entity:</td>
 				<td>
 					<select onchange="qbuilder('qbuilder.to.entity')" id="qbuilder.to.entity">
@@ -2560,8 +2665,10 @@ select {
 					<input onchange="qbuilder('qbuilder.to.value')" id="qbuilder.to.from.value"></input>
 				</td>
 			</tr>
+			<button onclick='querySearch()'>Search</button-->
 			</table>
-			<button onclick='querySearch()'>Search</button>
+			<button onclick='querySimpleSearch()'>Search</button>
+			
 		</div>
 
 	</div>
