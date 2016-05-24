@@ -485,12 +485,12 @@
 			var fromProperty = document.getElementById('qbuilder.from.property').value;
 			var fromValue = document.getElementById('qbuilder.from.value').value;
 			
-			var command = 'MATCH (n:'+fromEntity+'*{'+fromProperty+':"'+fromValue+'"}) RETURN id(n), labels(n), n';
+			var command = 'MATCH (n:'+fromEntity+'{'+fromProperty+':"'+parseDataType(fromValue)+'"}) RETURN id(n), labels(n), n';
 			console.log(command);
 			var callback = function(nodesResult){addSingleNodesFromResults(nodesResult)};
 			Neo4j_Command([command], callback);
 			
-			var command = 'MATCH (n:'+fromEntity+'{'+fromProperty+':"'+fromValue+'"})-[r]-(m) RETURN id(n), labels(n), n , id(r), type(r), r, id(m), labels(m), m';
+			var command = 'MATCH (n:'+fromEntity+'{'+fromProperty+':'+parseDataType(fromValue)+'})-[r]-(m) RETURN id(n), labels(n), n , id(r), type(r), r, id(m), labels(m), m';
 			var callback = function(nodesResult){addNodesFromResults(nodesResult)};
 			Neo4j_Command([command], callback);
 
@@ -836,6 +836,15 @@
 //USEFULL FUNCTIONS
 		//convert string to Base64
 		//var encodedData = window.btoa(stringToEncode);
+
+		function parseDataType(n) {
+			if (n=="true"){return true;}
+			if (n=="false"){return false;}
+			if (n=="null"){return null;}
+			if (n=="undefined"){return undefined;}
+			if (!isNaN(parseFloat(n)) && isFinite(n)) return Number(n);
+			return '"' + n + '"';
+		}
 
 		var sort_by = function(field, reverse, primer){
 		   var key = primer ? 
