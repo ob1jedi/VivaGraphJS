@@ -412,25 +412,24 @@
 		
 		function Neo4j_extractProperties(nodesResult) //extract properties from a collection of nodes, from a cypher node search
 		{
-			
+			var propertyList = [];
 			for (var i = 0; i < nodesResult.results.length; i++){		
 				var result = nodesResult.results[i];
 				for (var d = 0; d < result.data.length; d++){
 					var row = result.data[d].row;
-					return new neoPropertyList(row[0]);
+					propertyList = propertyList.concat(new neoPropertyList(row[0]));
 				}
 			}
-			return;
+			
+			return propertyList;
 		}
 		function Neo4j_extractValues(nodesResult) //extract properties from a collection of nodes, from a cypher node search
 		{
-			//console.log(nodesResult);
 			var valueList = [];
 			for (var i = 0; i < nodesResult.results.length; i++){		
 				var result = nodesResult.results[i];
 				for (var d = 0; d < result.data.length; d++){
 					var row = result.data[d].row;
-					//console.log(row[0]);
 					valueList.push(row[0]);
 				}
 			}
@@ -449,10 +448,9 @@
 				
 				var selectedTypeValue = document.getElementById(selectType).value;
 				var command = "MATCH (n:"+selectedTypeValue+") return n";
+				
 				var callback = function(nodesResult){
 					var propertyList = Neo4j_extractProperties(nodesResult)
-					
-					
 					propertyList.forEach(function(prop){
 						propertyElement.innerHTML += '<option value="'+prop.key+'">' + prop.key + '</option>';
 					});
@@ -470,7 +468,7 @@
 				var callback = function(nodesResult){
 					var valueList = Neo4j_extractValues(nodesResult)
 					var valueElement = document.getElementById(childElementName);
-					valueElement.innerHTML = '<option value=""></option>';
+					valueElement.innerHTML = '<option value=""></option>';	
 					valueList.forEach(function(prop){
 						valueElement.innerHTML += '<option value="'+prop+'">' + prop + '</option>';
 					});
@@ -484,16 +482,44 @@
 			var fromEntity = document.getElementById('qbuilder.from.entity').value;
 			var fromProperty = document.getElementById('qbuilder.from.property').value;
 			var fromValue = document.getElementById('qbuilder.from.value').value;
+			var propertyBlock = (fromProperty)?'{'+fromProperty+':'+parseDataType(fromValue)+'}':'';
 			
-			var command = 'MATCH (n:'+fromEntity+'{'+fromProperty+':"'+parseDataType(fromValue)+'"}) RETURN id(n), labels(n), n';
-			console.log(command);
+			var command = 'MATCH (n:'+fromEntity + propertyBlock + ') RETURN id(n), labels(n), n';
 			var callback = function(nodesResult){addSingleNodesFromResults(nodesResult)};
 			Neo4j_Command([command], callback);
 			
-			var command = 'MATCH (n:'+fromEntity+'{'+fromProperty+':'+parseDataType(fromValue)+'})-[r]-(m) RETURN id(n), labels(n), n , id(r), type(r), r, id(m), labels(m), m';
+			var command = 'MATCH (n:'+fromEntity + propertyBlock+')-[r]-(m) RETURN id(startnode(r)), labels(startnode(r)), startnode(r) , id(r), type(r), r, id(endnode(r)), labels(endnode(r)), endnode(r)';
 			var callback = function(nodesResult){addNodesFromResults(nodesResult)};
 			Neo4j_Command([command], callback);
 
+		}
+		
+		function queryRecursiveSearch()
+		{
+			var fromEntity = document.getElementById('qbuilder.from.entity').value;
+			var fromProperty = document.getElementById('qbuilder.from.property').value;
+			var fromValue = document.getElementById('qbuilder.from.value').value;
+			var propertyBlock = (fromProperty)?'{'+fromProperty+':'+parseDataType(fromValue)+'}':'';
+			
+			var processedNodes = [];
+			var command = 'MATCH (n:'+fromEntity + propertyBlock+')-[r]-(m) RETURN id(startnode(r)), labels(startnode(r)), startnode(r) , id(r), type(r), r, id(endnode(r)), labels(endnode(r)), endnode(r)';
+			
+			var callback = function(nodesResult){
+				var nodeList = addNodesFromResults(nodesResult);
+				nodeList.forEach(function (nodex){				
+					if (processedNodes.indexOf(nodex.id) == -1) { //...node has already been processed.
+						console.log('new');
+						command = 'MATCH (n)-[r]-(m) WHERE ID(n) = '+ nodex.id +' RETURN id(startnode(r)), labels(startnode(r)), startnode(r) , id(r), type(r), r, id(endnode(r)), labels(endnode(r)), endnode(r)';
+						Neo4j_Command([command], callback);
+						processedNodes.push(nodex.id);
+					}
+					else
+					{
+						console.log('old');
+					}
+				});
+			};
+			Neo4j_Command([command], callback);
 		}
 		
 		/*
@@ -517,13 +543,14 @@
 		
 		function addNodesFromResults(nodesResults)
 		{
+			var nodeList = [];
 			for (var i = 0; i < nodesResults.results.length; i++){
 				
 				var result = nodesResults.results[i];
 				for (var d = 0; d < result.data.length; d++){
 					var row = result.data[d].row;
 					
-					console.log(row);
+					//console.log(row);
 					var I_N_ID = 0;
 					var I_N_LABELS = 1;
 					var I_N_PROPS = 2;
@@ -539,7 +566,7 @@
 					dat.id =row[I_N_ID];
 					if (row[I_N_LABELS]){dat.labels = row[I_N_LABELS];}
 					if (row[I_N_PROPS]){dat.properties = new neoPropertyList(row[I_N_PROPS]);}
-					var node = addDataNode(row[I_N_ID], dat);
+					nodeList.push(addDataNode(row[I_N_ID], dat));
 					if (!GRAPH.getNode(row[I_N_ID])){
 						var pos = layout.getNodePosition(row[I_N_ID]);
 						layout.setNodePosition(row[I_N_ID], pos.x, pos.y);
@@ -549,7 +576,7 @@
 					dat.id =row[I_M_ID];
 					if (row[I_M_LABELS]){dat.labels = row[I_M_LABELS];}
 					if (row[I_M_PROPS]){dat.properties = new neoPropertyList(row[I_M_PROPS]);}
-					var node = addDataNode(row[I_M_ID], dat);
+					nodeList.push(addDataNode(row[I_M_ID], dat));
 					if (!GRAPH.getNode(row[I_M_ID])){
 						var pos = layout.getNodePosition(row[I_M_ID]);
 						layout.setNodePosition(row[I_M_ID], pos.x, pos.y);
@@ -567,6 +594,7 @@
 					//fixTextWidth();
 				}
 			}
+			return nodeList;
 		}
 		
 		function addSingleNodesFromResults(nodesResults)
@@ -610,7 +638,6 @@
 		
 		function addDataLink(fromNodeID, toNodeID, linkData)
 		{
-		//console.log(relationshipData);
 			//var linkData = {};relationshipData;
 			//linkData.connectionStrength = 110;
 			var link = GRAPH.addLink(fromNodeID, toNodeID, linkData);
@@ -829,7 +856,6 @@
 		
 		//function addLabelSelector(labelName)
 		//{
-			//console.log(labelName);
 			//if (getNeoLabel(labelName)) return;
 
 		//}
@@ -1008,7 +1034,6 @@
 		
 		function Neo4j_GetNodesByLabel(byLabel)
 		{
-			//console.log("Getting Nodes: " + byLabel);
 			var matchPattern = 'n';
 			if (byLabel) {matchPattern += ":" + byLabel;}
 			//var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
@@ -1364,6 +1389,7 @@
 		
 		function fixTextWidth(nodeUI)
 		{
+			if (!currentTheme.showLabels) {return;}
 			var widthOfNode = Number(nodeUI.children[UI_MAIN_INDEX].getBBox().width);
 			var minWidth = widthOfNode - widthOfNode * 0.1;
 			var widthOfText = Number(nodeUI.children[UI_TEXT_INDEX].getBBox().width);
@@ -1776,7 +1802,6 @@
 						
 					//rectx.attr('height', 0);
 					//slideoutText.getBBox().height;
-					//console.log(slideoutText.getBBox().height);
 		   
 					var visDefs = '<defs>';
 					visDefs += '<filter id="f3" x="0" y="0" width="200%" height="200%"><feOffset result="offOut" in="SourceAlpha" dx="20" dy="20" /><feGaussianBlur result="blurOut" in="offOut" stdDeviation="10" /><feBlend in="SourceGraphic" in2="blurOut" mode="normal" /></filter>';
@@ -2041,7 +2066,6 @@
 				link.data.properties.forEach(function(prop){
 						linkText.innerHTML += '<tspan dx="-' + textwidth + 'em" dy="1.5em" >' + prop.key + ": " + prop.value+  '</tspan>';
 						textwidth = 5;
-						console.log(linkText.attr('dx'));
 				});
 				
 				var linkRect = Viva.Graph.svg('rect')
@@ -2075,7 +2099,6 @@
 					
 				
 				//linkPath.append(group);
-				console.log(group)
 				//linkPath.append(rectx);
 				//linkPath.attr('class','link');
 				
@@ -2125,7 +2148,6 @@
 				for (var i = 0; i < linkUI.children.length; i++)
 				{
 					var child = linkUI.children[i];
-					//console.log(child);
 					if (!child) continue;
 					if (!child.attr) continue;
 					if (!child.attr('refx')) continue;
@@ -2136,7 +2158,6 @@
 						
 						if (!child.children[h]) continue;
 						//if (!child.children[h].attr) continue;
-						//console.log(child.children[h]);
 						//if (!child.children[h].attr('x')) continue;
 						//child.children[h].attr('x', curvex);
 					}
@@ -2677,7 +2698,7 @@ select {
 			<button onclick='querySearch()'>Search</button-->
 			</table>
 			<button onclick='querySimpleSearch()'>Search</button>
-			
+			<button onclick='queryRecursiveSearch()'>Tree Search</button>
 		</div>
 
 	</div>
