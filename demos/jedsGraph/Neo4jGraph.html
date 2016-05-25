@@ -126,7 +126,7 @@
 		function datax() {
 		  this.nodeType = 'data';
 		  this.id = 0;
-		  this.labels = [];
+		  this.labels = []; //string array of labels
 		  this.nodeSize = 25;
 		  this.nodeColor = '#808080';
 		  this.nodeShape = 'circle';
@@ -163,6 +163,88 @@
 
 //FUNCTIONS...
 
+		function createJsonFromSelectedNodes()
+		{
+			//get the rootmost objects amongst the check nodes...
+			var rootMostNodes = [];
+			var processedNodes = [];
+			console.log('checked nodes');
+			console.log(checkedNodes);
+			checkedNodes.forEach(function(node) { //iterate through checked nodes...
+				if (processedNodes.map(function(n) {return n.id}).indexOf(node.id) == -1){ //...node has not been processed yet
+					processedNodes.push(node); //...add node to processed list
+					var isRootNode = true;
+					node.data.fromNodes.forEach(function (fromnode){ //...iterate through current node's fromNodes
+						if (checkedNodes.map(function(n) {return n.id}).indexOf(node.id) > -1) //...current fromNode is in the checkedNodes list, therefore its not a rootmost node
+						{	
+							isRootNode = false;
+							return;
+						}
+					})
+					if (isRootNode) {rootMostNodes.push(node);}
+				}
+			});
+			if (rootMostNodes.length == 0 && checkedNodes.length != 0) {rootMostNodes.push(checkedNodes[0]);}  //resolve a cyclic scenario by just picking the first checked node.
+			
+			var finalOutput = '{';
+			rootMostNodes.forEach(function (node) {
+				finalOutput += createJsonNode(node);
+			})
+			finalOutput += '}';
+			console.log(finalOutput);
+			return finalOutput;
+			document.getElementById('generatedJson').value = finalOutput;
+			
+		}
+		
+		function createJsonNode(node)
+		{
+			//get nodes properties into a list...
+			var propertyList = '';
+			node.data.properties.forEach(function(prop){
+				if (propertyList != '') {propertyList+=','}
+				propertyList+= '"' + prop.key +'":' +parseDataType(prop.value);
+			});
+			var entityTypes = [];
+			node.data.toNodes.forEach(function (childNode){
+				childNode.data.labels.forEach(function (label){ 
+					if (entityTypes.indexOf(label) == -1){entityTypes.push(label);} 
+				});
+			});
+			//console.log('entityTypes'); console.log(entityTypes);
+			
+			var childObjectJsons = [];
+			var objectList = '';
+			entityTypes.forEach(function (etype){
+				var processedNodes = [];
+				node.data.toNodes.forEach(function (childNode){
+					if (childNode.data.labels.indexOf(etype) > -1 && processedNodes.indexOf(childNode.id) == -1)
+					{
+						if (checkedNodes.map(function(n){return n.id}).indexOf(childNode.id) > -1)
+						{
+							processedNodes.push(childNode.id);
+							var childOutput = createJsonNode(childNode);
+							if (childOutput != ''){childOutput = '{' + childOutput + '}';}
+							if (childOutput != ''){
+								if (objectList != '') {propertyList+=',';}
+								objectList += childOutput; 
+							}
+						}
+					}
+				})
+				
+				var containerOutput = ''; 
+				if (objectList != '{}'){containerOutput = objectList;}
+				if (processedNodes.length > 1 && containerOutput != ''){ containerOutput += '[' + containerOutput + ']';}
+				if (containerOutput != ''){containerOutput = '"' + etype + '":' + containerOutput}				
+				if (containerOutput != ''){
+					if (propertyList != ''){propertyList += ','}
+					propertyList += containerOutput;
+				}
+			});
+			return propertyList;
+		}
+		
 		function neoPropertyList(obj)
 		{
 			var propArray = [];
@@ -444,33 +526,39 @@
 				var childElementName = 'qbuilder.'+scope[1]+'.property';
 				var propertyElement = document.getElementById(childElementName);
 				propertyElement.innerHTML = '<option value=""></option>';
-				document.getElementById('qbuilder.'+scope[1]+'.value').innerHTML = '<option value=""></option>';
+				document.getElementById('qbuilder.'+scope[1]+'.selectvalue').innerHTML = '<option value=""></option>';
 				
 				var selectedTypeValue = document.getElementById(selectType).value;
 				var command = "MATCH (n:"+selectedTypeValue+") return n";
-				
+				var listedProperties = [];
 				var callback = function(nodesResult){
 					var propertyList = Neo4j_extractProperties(nodesResult)
-					propertyList.forEach(function(prop){
-						propertyElement.innerHTML += '<option value="'+prop.key+'">' + prop.key + '</option>';
+					propertyList.sort(sort_by('key', false, function(a){return a.toUpperCase()})).forEach(function(prop){
+						if (listedProperties.indexOf(prop.key) == -1) {
+							listedProperties.push(prop.key);
+							propertyElement.innerHTML += '<option value="'+prop.key+'">' + prop.key + '</option>';
+						}
 					});
 				};
 				Neo4j_Command([command], callback);
 			}
 			if (scope[2] == 'property'){
-				var childElementName = 'qbuilder.'+scope[1]+'.value';
+				var childElementName = 'qbuilder.' + scope[1] + '.selectvalue';
 				var selectedEntity = document.getElementById('qbuilder.'+scope[1]+'.entity').value;
 				var selectedProperty = document.getElementById('qbuilder.'+scope[1]+'.property').value;
 				childElementName.innerHTML = '<option value=""></option>';
-				
+				var listedValues = [];
 				if (!selectedProperty){ return;}
 				var command = "MATCH (n:"+selectedEntity+") return distinct n." + selectedProperty;
 				var callback = function(nodesResult){
 					var valueList = Neo4j_extractValues(nodesResult)
 					var valueElement = document.getElementById(childElementName);
 					valueElement.innerHTML = '<option value=""></option>';	
-					valueList.forEach(function(prop){
-						valueElement.innerHTML += '<option value="'+prop+'">' + prop + '</option>';
+					valueList.sort().forEach(function(prop){
+						if (listedValues.indexOf(prop) == -1){ 
+							listedValues.push(prop)
+							valueElement.innerHTML += '<option value="'+prop+'">' + prop + '</option>';
+						}
 					});
 				};
 				Neo4j_Command([command], callback);
@@ -806,7 +894,7 @@
 		{
 			if (!nodeId){nodeId = selectedNodeID;}
 			var node = GRAPH.getNode(nodeId);
-			node.data.nodeSize = node.data.nodeSize * 1.05;
+			node.data.nodeSize = node.data.nodeSize + 50/node.data.nodeSize;
 			addNodeToGraph(node.id,node.data);
 			increaseNodeSprings(node.id);
 			//node.data.toLinks.forEach(function(link){
@@ -2648,7 +2736,7 @@ select {
 			</div>
 		</div>
 		
-				<div class='toolPanel'>		
+		<div class='toolPanel'>		
 
 			<div class="panelheader">Build Query:</div> 
 			<table>
@@ -2668,8 +2756,10 @@ select {
 			<tr>
 				<td>is:</td>
 				<td>
-					<select onchange="qbuilder('qbuilder.from.value')" id="qbuilder.from.value"></select>
-					
+					<!--select onchange="qbuilder('qbuilder.from.value')" id="qbuilder.from.value"></select-->
+					<input onchange="qbuilder('qbuilder.from.value')" id="qbuilder.from.value" type="text" name="" list="qbuilder.from.selectvalue">
+					<datalist id="qbuilder.from.selectvalue"></datalist>
+
 				</td>
 			</tr>
 			
@@ -2700,7 +2790,11 @@ select {
 			<button onclick='querySimpleSearch()'>Search</button>
 			<button onclick='queryRecursiveSearch()'>Tree Search</button>
 		</div>
-
+		
+		<div class='toolPanel'>		
+			<div class="panelheader">Functions:</div>
+			<button onclick='createJsonFromSelectedNodes()'>Create Json</button>
+		</div>
 	</div>
 	
 	
@@ -2746,17 +2840,14 @@ select {
 			<button onclick='addPropertyToChecked()'>Highlighted</button>
 			<button onclick='addPropertyToAll()'>All</button>
 		</div>
-		
 
-		
-		
 		<div class='toolPanel'>
 			<div>
 				<button onclick='relateSelectedToNode()'>Relate entity</button>
 				<button onclick='deleteNode()'>Delete entity</button>
 			</div>
 		</div>
-		
+
 		<div class='toolPanel'>
 			<div> 
 				<div class="panelheader">Bulk</div>
@@ -2765,7 +2856,6 @@ select {
 				<button onclick='arrangeBy()'>Arrange</button>
 			</div>
 		</div>
-	
 
 		<div class='toolPanel' id='panelAppearance'>
 			<div class="panelheader">Appearance</div>
@@ -2783,7 +2873,6 @@ select {
 			<button class="popup">Font
 				<div class="popuptext">
 						<div id="hovertext" onclick='fontGrow()'>Grow</div>
-						
 						<div id="hovertext" onclick='fontShrink()'>Shrink</div>
 						<div id="hovertext" onclick='fontUp()'>Move Up</div>
 						<div id="hovertext" onclick='fontDown()'>Move Down</div>
@@ -2815,19 +2904,13 @@ select {
 			  <input class="check" id="vo.ch" onclick="updateInteractionOptions()" type="checkbox" name="descendants" value=""> Multi Select<br>
 			</div>
 		</div>
-
-		
-
-		
-
-	
 	</div>
 	
 	<div id="nodeOptions">
 		<button onclick='relateSelectedToNode()'>Relate entity</button>
 		<button onclick='deleteNode()'>Delete entity</button>
 	</div>
-			
+
 
 </body>
 

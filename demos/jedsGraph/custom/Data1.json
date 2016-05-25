@@ -27,7 +27,7 @@ var jsonObject = {
 			"prebuiltThemeIndex":3,
 			/*The 4bit rgb range from which label colors can be automatically generated.*/
 			"entityRgbRange":{"min":40,"max":140},
-			"showRelationships":"all",
+			"showRelationships":"none",
 			/*showRelationships: "all/on-highlight/none" */
 			"showRelationProperties": "inline",
 			"showLabels":true,
@@ -49,7 +49,7 @@ var jsonObject = {
 			"linkColor":"#21415f", /*...html/hex color*/
 			"rounded":false, /*...inner node shadow*/
 			"loadRelationPopouts":false,
-			"loadNodePopouts":true
+			"loadNodePopouts":false
 		}
 	}
 }
