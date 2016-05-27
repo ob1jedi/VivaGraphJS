@@ -7,7 +7,7 @@ var jsonObject = {
 		},
 	"startupOptions":{
 		"startupSearch":[
-			{"label":"SOME_LABEL"},
+			{"label":"Car"},
 			{"label":"SOME_LABEL2"}
 		],
 		"nodeDisplayValues":[
@@ -27,7 +27,7 @@ var jsonObject = {
 			"prebuiltThemeIndex":3,
 			/*The 4bit rgb range from which label colors can be automatically generated.*/
 			"entityRgbRange":{"min":40,"max":140},
-			"showRelationships":"none",
+			"showRelationships":"all",
 			/*showRelationships: "all/on-highlight/none" */
 			"showRelationProperties": "inline",
 			"showLabels":true,
