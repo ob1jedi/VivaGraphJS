@@ -7,13 +7,25 @@ var jsonObject = {
 		},
 	"startupOptions":{
 		"startupSearch":[
-			{"label":"Car"},
-			{"label":"SOME_LABEL2"}
+			/*{"label":"SOME_LABEL"*/
+			{"label":"host"},
+			{"label":"service"},
+			{"label":"ipv4network"},
+			{"label":"site"}
 		],
 		"nodeDisplayValues":[
-			{"forLabel":"Test4", "displayField":"Active"},
-			{"forLabel":"Person", "displayField":"name"},
-			{"forLabel":"Movie", "displayField":"title"}
+			/*{"label":"SOME_LABEL", displayField??label, displayLabel??label},*/
+			{"label":"host", "displayField":"name"},
+			{"label":"service", "displayField":"name"},
+			{"label":"ipv4network", "displayField":"name"},
+			{"label":"site", "displayField":"name"}
+		],
+		"nodeDisplayBody": [
+			/*{"label":"SOME_LABEL", "image":"IMAGE_URL"??none, "color":"HEXVALUE"??auto, "labelPos":"above/under/left/right"??center},*/
+			{"label":"host", "image":"custom/server.svg", "color":"transparent", "labelPos":"right"},
+			{"label":"service", "image":"custom/binoculars.svg", "labelPos":"right", "color":"transparent"},
+			{"label":"site", "image":"custom/placeholder.svg" },
+			{"label":"ipv4network", "image":"custom/network.svg" }
 		]
 	},
 	"viewOptions":{
@@ -23,33 +35,23 @@ var jsonObject = {
 	
 	},	
 	"displaySettings":{
-			"usePrebuiltTheme":false, /* set to false to use the settings in this file instead(below)*/
+			"backgroundImage":null, /*set to null for nothing*/
+			"usePrebuiltTheme":false, /*set to false to use the settings in this file instead(below)*/
 			"prebuiltThemeIndex":3,
-			/*The 4bit rgb range from which label colors can be automatically generated.*/
-			"entityRgbRange":{"min":40,"max":140},
-			"showRelationships":"all",
-			/*showRelationships: "all/on-highlight/none" */
+			"entityRgbRange":{"min":40,"max":140},/*The 4bit rgb range from which label colors can be automatically generated.*/
+			"showRelationships":"on-highlight",/*showRelationships: "all/on-highlight/none" */
 			"showRelationProperties": "inline",
 			"showLabels":true,
 			"graphBackground":"#0e1a25",
 			"entityLabelColor":"white",
 			"opaque":false,
-			/*choices: 
-				rect (entities are rectangular)
-				circle (entities are circles)
-			*/
-			"labelSizing":"fontsize", 
-			/*choices: 
-				"hyphenate" (make labels shorter)
-				"fontsize" (make the font size smaller)
-				"" (no sizing, labels may extend past the boundaries of the node)
-			*/
+			"labelSizing":"fontsize", /*choices: "hyphenate" (make labels shorter) "fontsize" (make the font size smaller) "" (no sizing, labels may extend past the boundaries of the node)*/
 			"shadow":false, /*...outer node shadow*/
 			"glow":false, /*...outer node glow*/
 			"linkColor":"#21415f", /*...html/hex color*/
 			"rounded":false, /*...inner node shadow*/
-			"loadRelationPopouts":false,
-			"loadNodePopouts":false
+			"loadRelationPopouts":true,
+			"loadNodePopouts":true
 		}
 	}
 }
