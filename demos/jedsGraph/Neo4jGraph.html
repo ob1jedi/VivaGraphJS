@@ -21,12 +21,14 @@
 		var labelsList = []; //list of "neoLabel" objects
 		var nodeList = []; //list of "node" objects
 		var monitoredNodes = [];//list of "node" objects
+		var fadedNodes = [];
 		var monitoredLinks = []; //list of "link" objects
 		var animUpdateNodes = [];//list of "node" objects
+		var animUpdateLinks = []; //list of "link" objects
 		var checkedNodes = []; //list of "node" objects
 		var checkedLinks = []; //list of "node" objects
+		var highlightedLinks = [];
 		var linkList = []; //list of "link" objects
-		var animUpdateLinks = []; //list of "link" objects
 		var timeoutElements = []; //list of "timeoutElement" objects
 		
 		var selectedNodeID = '';
@@ -63,11 +65,11 @@
 						.attr('r',50)
 						.attr('fill','transparent')//'#4dffc3')
 						.attr('stroke','red')
-						.attr('stroke-opacity','0.5')
+						if (!currentTheme.opaque) {CommonUI.focusUI.attr('stroke-opacity','0.5')}
 						
 		CommonUI.linkFocusUI = Viva.Graph.svg('path')
 						   .attr('stroke', 'red')
-                           .attr('stroke-width', '10')
+                           .attr('stroke-width', '5')
 						
 		CommonUI.checkUI = Viva.Graph.svg('circle')
 						.attr('cx', 0) //...for circle
@@ -75,7 +77,8 @@
 						.attr('r',50)
 						.attr('fill','transparent')//'#4dffc3')
 						.attr('stroke','#99ff33')
-						.attr('stroke-opacity','0.5');
+						.attr('stroke-width', '5')
+						if (!currentTheme.opaque) {CommonUI.focusUI.attr('stroke-opacity','0.5')}
 		//MARKER: TEXT
 		CommonUI.linkMidMarker = Viva.Graph.svg('marker')
 			.attr('class', 'markertextmain')
@@ -178,6 +181,7 @@
 		  this.labels = []; //string array of labels
 		  this.nodeSize = 25;
 		  this.nodeColor = '#808080';
+		  this.nodeBorderColor = '#808080';
 		  this.nodeShape = 'circle';
 		  this.height = 25;
 		  this.width = 25;
@@ -231,9 +235,14 @@
 			this.toNodeID = -1;
 			this.id = -1;
 			this.name = '';
+			this.displayLabel = '';
 			this.properties = [];
 			this.UI = {};
-			this.checked = false;
+			this.checked = false; //...flag which indicates if the link is checked.
+			this.displayingData = false; //...flag which indicates if the link label is currently displayingData.
+			this.config = {}
+			//this.config.linkDisplayBody = {};
+			this.config.linkDisplayValues = {};
 			return this;
 		}
 		
@@ -320,7 +329,6 @@
 					var currenttime = +new Date();
 					if (currenttime > tele.activationPoint + (tele.duration *1000))
 					{	//remove element...
-						console.log('removing element');
 						tele.element.remove();
 						timeoutElements.splice(i, 1);
 					}
@@ -329,14 +337,7 @@
 				checkTimeoutElements(); 
 			}, 1000);
 		}
-		
-		
-		function displayRelations()
-		{
-			//var relationPanel = document.getElementById('relation.details');
-			//checkedNodes.forEach()
-			//relationPanel.innerHTML = '<>'
-		}
+
 		
 		function removeMonitoredNode(nodeid)
 		{
@@ -348,7 +349,6 @@
 				for (var i = 0; i < vislist.children.length; i++ ){
 					if (vislist.children[i].children[0].children[2].innerHTML == nodeid
 					&& vislist.children[i].children[0].children[1].innerHTML == 'node:'){
-						console.log('removing element');
 						vislist.children[i].remove();
 					}
 				}
@@ -365,7 +365,6 @@
 				for (var i = 0; i < vislist.children.length; i++ ){
 					if (vislist.children[i].children[0].children[2].innerHTML == linkid
 					&& vislist.children[i].children[0].children[1].innerHTML == 'link:'){
-						console.log('removing element');
 						vislist.children[i].remove();
 					}
 				}
@@ -450,8 +449,8 @@
 		
 		function performAnimations()
 		{	
+			//Node Update-Animations...
 			animUpdateNodes.forEach(function (node) {
-				//var nodeUI = graphics.getNodeUI(node.id);
 				var rippleCircle = Viva.Graph.svg('circle')
 						.attr('cx', 0)
 						.attr('cy', 0)
@@ -460,7 +459,6 @@
 						.attr('stroke','red')
 						.attr('stroke-width','5')
 						.attr('stroke-opacity','0.7')
-				
 				var circletiny = Viva.Graph.svg('circle')
 						.attr('cx', 20)
 						.attr('cy', 30)
@@ -469,27 +467,37 @@
 						.attr('stroke','red')
 						.attr('opacity',0.5)
 						.attr('stroke-width',0)
-				
 				var gSattelite = Viva.Graph.svg('g')
 				gSattelite.append(circletiny);
 				gSattelite.attr('dx',100);
 				gSattelite.attr('dy',100);
-				
 				timeoutElements.push(new timeoutElement(rippleCircle, 5));
 				timeoutElements.push(new timeoutElement(gSattelite, 60));
-				
-				console.log(node);
 				node.data.UI.fullUI.insertBefore(rippleCircle, node.data.UI.bodyUI);
 				node.data.UI.fullUI.insertBefore(gSattelite, node.data.UI.bodyUI);
-				
-				//nodeUI.append(rippleCircle);
-				//nodeUI.append(gSattelite);
-				
-				//animateTest(node);
 				gSattelite.attr('class','rotatee');
 				rippleCircle.attr('class','droplet');
 			});
 			animUpdateNodes = [];
+			
+			//Link Update-Animations...
+			animUpdateLinks.forEach(function (link) {				
+				var circletiny2 = Viva.Graph.svg('circle')
+						.attr('cx', 1)
+						.attr('cy', 1)
+						.attr('r', .5)
+						.attr('fill','red')//node.data.nodeColor)//'#4dffc3')
+						.attr('stroke','red')
+						.attr('opacity',0.5)
+						.attr('stroke-width',0)
+				var gSattelite2 = Viva.Graph.svg('g')
+				gSattelite2.append(circletiny2);
+				timeoutElements.push(new timeoutElement(gSattelite2, 60));
+				link.data.UI.midMarkerUI.append(gSattelite2);
+				gSattelite2.attr('class','rotatee');
+			});
+			animUpdateLinks = [];
+			
 		}
 		
 		function testFunction(){
@@ -736,7 +744,6 @@
 		}
 		function getDataLink(id)
 		{
-			//console.log(linkList);
 			for (var i = 0; i < linkList.length; i++){
 				if (linkList[i].data.id == id){
 					return linkList[i];
@@ -747,19 +754,19 @@
 		{
 			var x = [];
 				linkList.forEach(function(link, index){
-				if ((link.FromNodeID == fromNodeID && link.ToNodeID == toNodeID) ||
-					(link.ToNodeID == fromNodeID && link.FromNodeID == toNodeID)){
+				if ((link.data.fromNodeID == fromNodeID && link.data.toNodeID == toNodeID) ||
+					(link.data.toNodeID == fromNodeID && link.data.fromNodeID == toNodeID)){
 					x.push(link);
 				}
 			});
 			return x;
 		}
 		
-		function getNodePropertyValue(nodeData, propertyName)
+		function getNodePropertyValue(propertyList, propertyName)
 		{
 			var x;
-			if (!nodeData.properties) return;
-			nodeData.properties.forEach(function (prop, index){
+			if (!propertyList) return;
+			propertyList.forEach(function (prop, index){
 				if (prop.key == propertyName)
 				{
 					x = prop.value;
@@ -833,19 +840,18 @@
 						var qbuilderFromEntitySelector = document.getElementById('qbuilder.from.entity');
 						var qbuilderToEntitySelector = document.getElementById('qbuilder.to.entity');
 						var LabelsDiv = document.getElementById('availableLabels');
-						LabelsDiv.innerHTML = '';
+						
+						var color = 'gray';
+						var button_onclick = "Neo4j_GetNodesByLabel()";
+						var fetchButton = '<button class="fortext tooltip" onclick="'+button_onclick+'">F<div class="tooltiptext">Fetch from database</div></button>'
+						
+						LabelsDiv.innerHTML = '<div onclick="highlightLabel()" id="labelPanel" style="background-color:'+color+';">All' + fetchButton + '</div>';
 						qbuilderFromEntitySelector.innerHTML = '<option value=""></option>';
-						//qbuilderToEntitySelector.innerHTML = '';
 						labelsList.forEach(function(label,index){
-							var color = 'gray';
-							//if (refonly) {color = 'darkgray';}
-							var button_onclick = "Neo4j_GetNodesByLabel('"+label.name+"')";
-							var fetchButton = '<button class="fortext tooltip" onclick="'+button_onclick+'">F<div class="tooltiptext">Fetch from database</div></button>'
-							LabelsDiv.innerHTML = LabelsDiv.innerHTML + 
-								'<div onclick="highlightLabel('+index+')" id="labelPanel" style="background-color:'+color+';">' + label.name + fetchButton
-								'</div>';
+							button_onclick = "Neo4j_GetNodesByLabel('"+label.name+"')";
+							fetchButton = '<button class="fortext tooltip" onclick="'+button_onclick+'">F<div class="tooltiptext">Fetch from database</div></button>'
+							LabelsDiv.innerHTML = LabelsDiv.innerHTML + '<div onclick="highlightLabel('+index+')" id="labelPanel" style="background-color:'+color+';">' + label.name + fetchButton + '</div>';
 							qbuilderFromEntitySelector.innerHTML += '<option value="'+label.name+'">' +label.name+ '</option>';
-							//qbuilderToEntitySelector.innerHTML += '<option value="'+label.name+'">' +label.name+ '</option>';
 						});
 						
 			return newDataLabel;
@@ -881,7 +887,6 @@
 					dataNode.data.labels = nodeData.labels;
 					dataNode.data.properties = nodeData.properties;
 					//$(nodeUI).hide.show(0);
-					//console.log(dataNode);
 					animUpdateNodes.push(dataNode);
 				}
 				else{//no changes have been made to the node...
@@ -902,42 +907,29 @@
 			//set display label...
 			nodeData.displayLabel = "";
 			nodeData.labels.forEach(function(label, index){
-				//if(!getNeoLabel(label)) {
 				addDataLabel(label);
-					//labelsList.push(newLabel);
-					//addVisLabel(newLabel, labelsList.length-1);
-				//}
-				
-				//Don't show hidden labels...
-				if (hiddenLabels.indexOf(label) < 0){
-					if (nodeData.displayLabel) {nodeData.displayLabel += ','}
-					//setup text display for node based on config...
-					//config_ext.startupOptions.nodeDisplayValues.forEach(function(nodeDisplayValue){
-						//if (nodeDisplayValue.label == label)
-						//{
-					if(!nodeData.displayLabel) {nodeData.displayLabel = '';}
-					if (nodeData.config.nodeDisplayValues.displayField)
-					{
-						
-						if (nodeData.displayLabel!=""){nodeData.displayLabel +'\n';}
-						var propertyValue = getNodePropertyValue(nodeData, nodeData.config.nodeDisplayValues.displayField);
-						nodeData.displayLabel += propertyValue ? propertyValue : ' ';
-					}
-					if(nodeData.config.nodeDisplayValues.displayValue)
-					{
-						if (nodeData.displayLabel!=""){nodeData.displayLabel +'\n';}
-						nodeData.displayLabel += nodeData.config.nodeDisplayValues.displayValue;
-					}
-						//}
-					//});
-					if(nodeData.displayLabel=="") {
-						nodeData.displayLabel = label;
-					}
+				if (nodeData.displayLabel) {nodeData.displayLabel += ','}
+				if(!nodeData.displayLabel) {nodeData.displayLabel = '';}
+				if (nodeData.config.nodeDisplayValues.displayField){
+					if (nodeData.displayLabel!=""){nodeData.displayLabel +'\n';}
+					var propertyValue = getNodePropertyValue(nodeData.properties, nodeData.config.nodeDisplayValues.displayField);
+					nodeData.displayLabel += propertyValue ? propertyValue : ' ';
+				}
+				if(nodeData.config.nodeDisplayValues.displayValue){
+					if (nodeData.displayLabel!=""){nodeData.displayLabel +'\n';}
+					nodeData.displayLabel += nodeData.config.nodeDisplayValues.displayValue;
+				}
+				if(nodeData.displayLabel=="") {
+					nodeData.displayLabel = label;
 				}
 			});
 			//nodeData.displayLabel;
 			var aNeoLabel = getNeoLabel(nodeData.labels[0]);
-			if (aNeoLabel) {nodeData.nodeColor = aNeoLabel.color; nodeData.nodeColorRGB = aNeoLabel.colorRGB;}
+			if (aNeoLabel) {
+				nodeData.nodeColor = aNeoLabel.color; 
+				nodeData.nodeColorRGB = aNeoLabel.colorRGB;
+				nodeData.nodeBorderColor = rgb2hex(nodeData.nodeColorRGB.r-20, nodeData.nodeColorRGB.g-20, nodeData.nodeColorRGB.b-20);
+			}
 			
 			if (isNewNode){
 				dataNode = addNodeToGraph(nodeId,nodeData);				
@@ -1057,7 +1049,6 @@
 				var nodeList = addNodesFromResults(nodesResult);
 				nodeList.forEach(function (nodex){				
 					if (processedNodes.indexOf(nodex.id) == -1) { //...node has already been processed.
-						console.log('new');
 						command = 'MATCH (n)-[r]-(m) WHERE ID(n) = '+ nodex.id +' RETURN id(startnode(r)), labels(startnode(r)), startnode(r) , id(r), type(r), r, id(endnode(r)), labels(endnode(r)), endnode(r)';
 						Neo4j_Command([command], callback);
 						processedNodes.push(nodex.id);
@@ -1111,7 +1102,6 @@
 
 			var callback = function(nodesResult){addSingleNodesFromResults(nodesResult)};
 			var command = 'CREATE (n:' + entityName + propList + ') return id(n), labels(n), n'
-			console.log(command);
 			Neo4j_Command([command], callback);
 		}
 		
@@ -1138,7 +1128,6 @@
 
 			var callback = function(nodesResult){addSingleNodesFromResults(nodesResult)};
 			var command = 'MATCH (n) WHERE ID(n)=' + nodeID + propList + ' return id(n), labels(n), n'
-			console.log(command);
 			Neo4j_Command([command], callback);
 		}
 		
@@ -1162,7 +1151,6 @@
 
 			var callback = function(nodesResult){Neo4j_fetchRelation(nodeID1, nodeID2);}
 			var command = 'MATCH (n) WHERE ID(n) = ' + nodeID1 + ' MATCH (m) WHERE ID(m) = '+ nodeID2 + ' CREATE (n)-[r:'+ relationName + propList +']->(m) RETURN id(startnode(r)), labels(startnode(r)), startnode(r) , id(r), type(r), r, id(endnode(r)), labels(endnode(r)), endnode(r)'
-			console.log(command);
 			Neo4j_Command([command], callback);
 		}
 		
@@ -1211,7 +1199,6 @@
 					if (row[I_N_PROPS]){dat.properties = new neoPropertyList(row[I_N_PROPS]);}
 					addDataNode(row[I_N_ID], dat);
 					//if (!GRAPH.getNode(row[I_N_ID])){
-					//	console.log('repositioning');
 					//	var pos = layout.getNodePosition(row[I_N_ID]);
 					//	layout.setNodePosition(row[I_N_ID], pos.x, pos.y);
 					//}
@@ -1251,7 +1238,6 @@
 					if (row[I_N_PROPS]){dat.properties = new neoPropertyList(row[I_N_PROPS]);}
 					var node = addDataNode(row[I_N_ID], dat);
 					//if (!GRAPH.getNode(row[I_N_ID])){
-					//	console.log('repositioning');
 
 //					}
 				}
@@ -1260,7 +1246,6 @@
 		
 		function addSingleRelationFromResults(nodesResults)
 		{
-		//jed2
 			for (var i = 0; i < nodesResults.results.length; i++){
 				
 				var result = nodesResults.results[i];
@@ -1278,7 +1263,6 @@
 					if (row[I_R_PROPS]){dat.properties = new neoPropertyList(row[I_R_PROPS]);}
 					var node = addDataLink(row[I_N_ID], row[I_M_ID], dat);
 					//if (!GRAPH.getNode(row[I_N_ID])){
-					//	console.log('repositioning');
 
 //					}
 				}
@@ -1320,49 +1304,69 @@
 		
 		function addDataLink(fromNodeID, toNodeID, linkData)
 		{
+			var bIsNew = false;
+			var link;
 			var existingLink = getDataLink(linkData.id);
 			if (existingLink){
 				//var linkUI = graphics.getLinkUI(linkData.id);
 				//check if any properties changed 
 				var updatedProperties = getUpdatedProperties(linkData.properties, existingLink.data.properties);
 				if (linkData.name != existingLink.data.name || updatedProperties.length > 0){
-					console.log('link update detected');
-					//if(linkData.UI.nameTextUI){linkData.UI.nameTextUI.innerHTML = linkData.name;}
-					//linkUI.children[LINK_INDEX_0].innerHTML = linkData.name;
-					if(existingLink.data.UI.nameTextUI){existingLink.data.UI.nameTextUI.innerHTML = linkData.name;}
-					if(existingLink.data.UI.subTextUI){
-						//existingLink.data.UI.subTextUI.innerHTML = '';
-						existingLink.data.UI.subTextUI.innerHTML = propertyListToSvgList(linkData.properties, '<tspan x="0" dy="1.2em">', '</tspan>');
-						//existingLink.data.UI.subTextUI.attr('x',20);
-						//graphics.placeLink(linkUI, fromPos, toPos)
-						//$(existingLink.data.UI.fullUI).hide(0).show(0);
-					}
-					//linkUI.children[LINK_INDEX_1].innerHTML = propertyListToSvgList(linkData.properties, '<tspan x="0" dy="1.2em">', '</tspan>');
 					existingLink.data.name = linkData.name;
+					existingLink.data.displayLabel = linkData.name;
 					existingLink.data.properties = linkData.properties;
 					//$(linkUI).hide().show(0);
 					animUpdateLinks.push(existingLink);
 				}
-				return;
+				link = existingLink;
+				fromNodeID = existingLink.data.fromNodeID;
+				toNodeID = existingLink.data.toNodeID;
+			}
+			else{
+				bIsNew = true;
+				link = GRAPH.addLink(fromNodeID, toNodeID, linkData);
+				link.data.fromNodeID = fromNodeID;
+				link.data.toNodeID = toNodeID;
+				link.data.displayLabel = linkData.name;
+				linkList.push(link); //new linkType(fromNodeID,toNodeID, linkData, linkData.id)); 
+				
 			}
 
 			var toNode = GRAPH.getNode(toNodeID);
 			var fromNode = GRAPH.getNode(fromNodeID);
-			linkData.fromNodeID = fromNodeID;
-			linkData.toNodeID = toNodeID;
 			
-			var link = GRAPH.addLink(fromNodeID, toNodeID, linkData);
-			linkList.push(link); //new linkType(fromNodeID,toNodeID, linkData, linkData.id)); 
-			
-			
-			
-			toNode.data.fromLinks.push(link);
-			toNode.data.fromNodes.push(fromNode);
-			fromNode.data.toLinks.push(link);
-			fromNode.data.toNodes.push(toNode);
-			increaseNodeSize(fromNodeID);
+			config_ext.startupOptions.linkDisplayValues.map(function (lconfig) {
+				var useConfig = true;
+				if (lconfig.labelFrom){useConfig = (lconfig.labelFrom == fromNode.data.labels[0])?useConfig:false}else{useConfig = false;}
+				if (lconfig.labelTo){useConfig = (lconfig.labelTo == toNode.data.labels[0])?useConfig:false}else{useConfig = false;}
+				if (lconfig.type){useConfig = (lconfig.type == link.data.name)?useConfig:false}else{useConfig = false;}
+				if (useConfig){
+					link.data.config = lconfig;
+					link.data.displayLabel = lconfig.displayField;
+					var propertyValue = getNodePropertyValue(link.data.properties, lconfig.displayField);
+					link.data.displayLabel = propertyValue ? propertyValue : ' ';
+				}			
+			});
+			refreshLinkVisual(link);
+
+			if (bIsNew)
+			{
+				toNode.data.fromLinks.push(link);
+				toNode.data.fromNodes.push(fromNode);
+				fromNode.data.toLinks.push(link);
+				fromNode.data.toNodes.push(toNode);
+				increaseNodeSize(fromNodeID);
+			}
 		}
-			
+		
+		function refreshLinkVisual(link)
+		{
+			if(link.data.UI.nameTextUI){link.data.UI.nameTextUI.innerHTML = link.data.displayLabel;}
+			if(link.data.UI.subTextUI){link.data.UI.subTextUI.innerHTML = propertyListToSvgList(link.data.properties, '<tspan x="0" dy="1.2em">', '</tspan>');}
+			toggleLink(link);
+			toggleLink(link);
+		}
+		
 		function unPinNode()
 		{
 			layout.pinNode(selectedNode, false);
@@ -1507,7 +1511,7 @@
 			//}else{ //...node already exists
 			//	//refresh nodes appearance
 			//	if (node.data.UI.fullUI){
-			//		//console.log('refreshing node: ' + nodeId)
+
 			//		$(node.data.UI.fullUI).hide().show();
 			//	}
 			//}
@@ -1557,6 +1561,8 @@
 				//if (node.data.UI.fullUI) {node.data.UI.fullUI.attr('stroke','transparent');}
 			//});
 			
+			fadedNodes = [];
+			
 			//checkedNodes = [];
 			nodeList.forEach(function(node){
 				//var nodeUI = graphics.getNodeUI(node.id);
@@ -1565,18 +1571,18 @@
 				//	linkUI.attr('stroke-opacity','0.1');
 				//});
 				
-				if (node.data.labels.indexOf(label.name) > -1){	
-					node.data.UI.fullUI.attr('fill-opacity','0.8');
-					node.data.UI.bodyUI.attr('fill-opacity','0.8');
-					checkedNodes.push(node);
-					if (checkedNodes.length > 0){displayRelations();}
+				//if (node.data.labels.indexOf(label.name) > -1){	
+				node.data.UI.fullUI.attr('fill-opacity',1);
+				node.data.UI.bodyUI.attr('fill-opacity',1);
+				//}
+				if (label && node.data.labels.indexOf(label.name) == -1){
+					node.data.UI.fullUI.attr('fill-opacity',0.2)
+					node.data.UI.bodyUI.attr('fill-opacity',0.2);
+					fadedNodes.push(node);
 				}
-				else{
-					node.data.UI.fullUI.attr('fill-opacity','0.2')
-					node.data.UI.bodyUI.attr('fill-opacity','0.2');
-				}
-					
 			});
+			
+			
 		}
 		
 		//function addLabelSelector(labelName)
@@ -2327,13 +2333,10 @@
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 		function showNodeDetails(node)
 		{
-		
-
-			
 			var processingElement = document.getElementById('selectedNode');
 			var labellist = ''
-			var html = '<a class="panelheader">Selected entity ID:</a> ' + selectedNodeID;
-			html += '<br/><a class="panelheader">Entity type<a>:<br/>' //+ labellist;
+			var html = '<a class="panelheader">Selected Entity:</a> <a class="dataNameLabel">' + selectedNodeID + '</a>';
+			//html += '<br/><a class="panelheader">Entity type</a>:<br/>' //+ labellist;
 			html += '<table>'
 			node.data.labels.forEach(function(label, index){
 				if (index!=0){labellist += ', ';}
@@ -2364,7 +2367,27 @@
 			{
 				updateElement.value = node.data.labels[0];
 			}
+		}
+		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+		function showLinkDetails(link)
+		{
+			var processingElement = document.getElementById('selectedLink');
+			var labellist = ''
+			var html = '<a class="panelheader">Selected Link:</a> <a class="dataNameLabel">' + link.data.id + '</a>';
+			html += '<br/><a class="panelheader">Link type</a>: <a class="dataNameLabel">'+link.data.name+'</a>' 	
+			processingElement.innerHTML = html;
 			
+			html = '<a class="panelheader">Properties<a>:';
+			html += '<table style="width:90%;">'
+			var processingElement = document.getElementById('linkDetails');
+			link.data.properties.forEach(function(property, index){
+				html += '<tr>'
+				var button_onclick = 'showOnNode(' + link.data.id + ', \'' + property.value + '\')';
+				html += '<td> <a class="dataNameLabel">' + property.key + '</a></td><td><a class="dataValueLabel"> ' + property.value + '</a></td>';
+				html += '</tr>'
+			});
+			html += '</table>'
+			processingElement.innerHTML = html;
 		}
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 		function highlightRelatedNodes(nodeId, isOn) {				   
@@ -2421,38 +2444,65 @@
 		   }
 		}
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-		function toggleLink(linkID){
-			var link = getDataLink(linkID);
-			if (!link.data.checked)
+		function toggleLink(link, bvalue){
+			if (bvalue == true && link.data.checked){return;}
+			if (bvalue == false && !link.data.checked){return;}
+			link.data.checked = !link.data.checked;
+			
+			if (link.data.checked) //link must be checked
 			{
-				link.data.UI.pathUI.attr('stroke-width', 10);
-				link.data.UI.pathUI.attr('stroke', 'green');
+				showLinkData(link);
+				link.data.UI.pathUI.attr('stroke-width', 5);
+				link.data.UI.pathUI.attr('stroke', '#99ff33');
 				link.data.checked = true;
 				checkedLinks.push(link);
 			}
-			else
+			else  //link must be unchecked
 			{
+				hideLinkData(link);
 				link.data.UI.pathUI.attr('stroke-width', 3);
 				link.data.UI.pathUI.attr('stroke', currentTheme.linkColor);
 				link.data.checked = false;
-				checkedLinks.map(function(l,index){if (l.id == linkID){checkedLinks.splice(index,1);}})
+				checkedLinks.map(function(l,index){if (l.id == link.data.id){checkedLinks.splice(index,1);}})
 			}
 		}
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-		function highlightLink(linkID) {
-			var link = getDataLink(linkID);
-			link.data.UI.pathUI.attr('stroke-width', 10);
+		function highlightLink(link) { //...for mouse-hover only
+			showLinkData(link);
+			link.data.UI.pathUI.attr('stroke-width', 5);
 			//link.data.UI.pathUI.attr('stroke', 'red');
 		}
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-		function unhighlightLink(linkID) {
-			var link = getDataLink(linkID);
+		function unHighlightLink(link) { //...for mouse-hover only
 			if (!link.data.checked){
+				hideLinkData(link);
 				link.data.UI.pathUI.attr('stroke-width', 3);
 			}
 			//link.data.UI.pathUI.attr('stroke', currentTheme.linkColor);
 		}
+		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+		function hideLinkData(link)
+		{
+			if (!link.data.displayingData){return;}
+			link.data.displayingData = false;
+			if(link.data.UI.nameTextUI){link.data.UI.nameTextUI.remove();}
+			if(link.data.UI.subTextUI){link.data.UI.subTextUI.remove();}
+		}
 		
+		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+		function showLinkData(link)
+		{
+			if (link.data.displayingData) {return;}
+			link.data.displayingData = true;
+			link.data.UI.nameTextUI = CommonUI.linkName.cloneNode();
+			link.data.UI.nameTextUI.innerHTML = link.data.displayLabel;
+			if(link.data.UI.midMarkerUI) {link.data.UI.midMarkerUI.append(link.data.UI.nameTextUI);}
+			if(currentTheme.showRelationProperties){			
+				link.data.UI.subTextUI = CommonUI.linkProps.cloneNode();
+				link.data.UI.subTextUI.innerHTML = propertyListToSvgList(link.data.properties, '<tspan x="0" dy="1.2em">', '</tspan>');
+				if(link.data.UI.midMarkerUI) {link.data.UI.midMarkerUI.append(link.data.UI.subTextUI);}
+			}
+		}
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 		function highlightSelectedNode(nodeId) {
 		   //var nodeUI;
@@ -2461,8 +2511,7 @@
 					//Remove previous selections visuals
 					var relevantLinks = selectedNode.data.toLinks.concat(selectedNode.data.fromLinks);
 					relevantLinks.forEach(function(link){
-						if(link.data.UI.nameTextUI){link.data.UI.nameTextUI.remove();}
-						if(link.data.UI.subTextUI){link.data.UI.subTextUI.remove();}
+						unHighlightLink(link,false);
 					});
 				}
 			
@@ -2498,8 +2547,6 @@
 			
 		   }
 		   else{ //not checking nodes...
-			//console.log('checkedNodes')
-			//console.log(checkedNodes);
 			checkedNodes.forEach(function(nodex){
 				//var checkednodeUI = graphics.getNodeUI(nodex.id);
 				if(nodex.data.UI.checkUI){
@@ -2517,18 +2564,8 @@
 		   //if (node.data.UI.focusUI){node.data.UI.focusUI.attr('stroke','red');}
 			//var relevantLinks = node.data.toLinks.concat(node.data.fromLinks);
 			//Display relationship details...
-			var checkLink = function(link){		   	
-				link.data.UI.nameTextUI = CommonUI.linkName.cloneNode();
-				link.data.UI.nameTextUI.innerHTML = link.data.name;
-				if(link.data.UI.midMarkerUI) {link.data.UI.midMarkerUI.append(link.data.UI.nameTextUI);}
-				link.data.UI.subTextUI = CommonUI.linkProps.cloneNode();
-				link.data.UI.subTextUI.innerHTML = propertyListToSvgList(link.data.properties, '<tspan x="0" dy="1.2em">', '</tspan>');
-				if(link.data.UI.midMarkerUI) {link.data.UI.midMarkerUI.append(link.data.UI.subTextUI);}
-			}
-			
-			
-			node.data.toLinks.forEach(function(l){checkLink(l)});
-			node.data.fromLinks.forEach(function(l){checkLink(l)});
+			node.data.toLinks.forEach(function(l){highlightLink(l,true)});
+			node.data.fromLinks.forEach(function(l){highlightLink(l,true)});
 			
 			/*relevantLinks.forEach(function(link){		   	
 				link.data.UI.nameTextUI = CommonUI.linkName.cloneNode();
@@ -2635,9 +2672,9 @@
 						.attr('r', node.data.nodeSize) //...for circle
 						.attr('fill',node.data.nodeColor)//node.data.nodeColor)//'#4dffc3')
 						.attr('stroke-width',3)
-						.attr('stroke', currentTheme.entityBorderColor)
-						.attr('stroke-opacity',0.5);
-						if (currentTheme.shadow) {nodeBody.attr('filter','url(#f3)');} //shadow
+						.attr('stroke', currentTheme.entityBorderColor==null?node.data.nodeBorderColor:currentTheme.entityBorderColor)
+						//.attr('stroke-opacity',0.5);
+						if (currentTheme.shadow) {nodeBody.attr('filter','url(#shadowEffect)');} //shadow
 						if (currentTheme.rounded) {nodeBody.attr('fill','url(#gradRound)');}
 						if (!currentTheme.opaque) {nodeBody.attr('fill-opacity',node.data.nodeOpacity);}
 					
@@ -2648,7 +2685,7 @@
 						.attr('width', node.data.nodeSize * 2)
 						.attr('height', node.data.nodeSize * 2)
 						.link(nodeConfig.image?nodeConfig.image:'');
-						if (currentTheme.shadow) {nodeBodyImage.attr('filter','url(#f3)');} //shadow
+						//if (currentTheme.shadow) {nodeBodyImage.attr('filter','url(#shadowEffect)');} //shadow
 						if (currentTheme.rounded) {nodeBodyImage.attr('fill','url(#gradRound)');}
 						if (!currentTheme.opaque) {nodeBodyImage.attr('fill-opacity',node.data.nodeOpacity);}
 						
@@ -2680,18 +2717,17 @@
                         .attr('rx', node.data.nodeSize/4)
                         .attr('height', 0)
 						.attr('fill','#141414')
-					if (currentTheme.shadow) {popoutBody.attr('filter','url(#f3)');} //shadow	
+					if (currentTheme.shadow) {popoutBody.attr('filter','url(#shadowEffect)');} //shadow	
                     if (!currentTheme.opaque) {popoutBody.attr('fill-opacity',0.3);}
 					
 					
 					var visDefs = '<defs>';
-					visDefs += '<filter id="f3" x="0" y="0" width="200%" height="200%"><feOffset result="offOut" in="SourceAlpha" dx="20" dy="20" /><feGaussianBlur result="blurOut" in="offOut" stdDeviation="10" /><feBlend in="SourceGraphic" in2="blurOut" mode="normal" /></filter>';
+					visDefs += '<filter id="shadowEffect" x="-1" y="-1" width="300%" height="300%"><feOffset result="offOut" in="SourceAlpha" dx="20" dy="20" /><feGaussianBlur result="blurOut" in="offOut" stdDeviation="10" /><feBlend in="SourceGraphic" in2="blurOut" mode="normal" /></filter>';
 					visDefs += '<radialGradient id="gradGlow" cx="50%" cy="50%" r="50%" fx="50%" fy="50%"><stop offset="0%" style="stop-color:#ffffff; stop-opacity:1" /><stop offset="100%" style="stop-color:#66e0ff;stop-opacity:0" /></radialGradient>';
 					visDefs += '<radialGradient id="gradRound" cx="50%" cy="50%" r="50%" fx="50%" fy="50%"><stop offset="80%" style="stop-color:rgb('+node.data.nodeColorRGB.r+','+node.data.nodeColorRGB.g+','+node.data.nodeColorRGB.b+'); stop-opacity:1" /><stop offset="100%" style="stop-color:rgb('+(node.data.nodeColorRGB.r-100) +','+(node.data.nodeColorRGB.g-100)+','+(node.data.nodeColorRGB.b-100)+');stop-opacity:1" /></radialGradient>';
 					visDefs += '</defs>'; 
 					ui.innerHTML = visDefs;
 					
-					//console.log('adding ui');
 					
 					node.data.UI.fullUI = ui;
 					node.data.UI.bodyUI = nodeBody;
@@ -2699,11 +2735,11 @@
 					node.data.UI.displayTextUI = displayText;
 					node.data.UI.popoutBodyUI = popoutBody;
 					node.data.UI.popoutTextUI = popoutText;
-					//console.log(node.data.UI);
+
 					//if (currentTheme.loadNodePopouts){ui.append(node.data.UI.bodyUI);}//else{ui.append(rectblank);}
 					if (currentTheme.loadNodePopouts){ui.append(node.data.UI.popoutBodyUI);}
 					ui.append(node.data.UI.bodyUI);
-					ui.append(node.data.UI.imageUI);
+					if (nodeConfig.image){ui.append(node.data.UI.imageUI);}
 					//ui.append(node.data.UI.focusUI);
 					if (currentTheme.showLabels){ui.append(node.data.UI.displayTextUI);}
 					if (currentTheme.loadNodePopouts){ui.append(node.data.UI.popoutTextUI);}
@@ -2928,7 +2964,7 @@
 					
 					if (currentTheme.showRelationships == 'all'){
 						markerText.append(markerLabel);
-						if (currentTheme.showRelationProperties == "inline"){markerText.append(markerProperties);}
+						if (currentTheme.showRelationProperties){markerText.append(markerProperties);}
 					}
 					var defs = graphics.getSvgRoot().append('defs');
 					defs.append(markerText);
@@ -3000,17 +3036,14 @@
 				$(linkPath).hover(function() { // MOUSE HOVER
 					//markerLabel.attr('fill', 'yellow');
 					if (link.data.checked){}
-					highlightLink(link.data.id);
-					//console.log('link hover in');
+					//highlightLink(link);
 				}, function() { // mouse out
-					unhighlightLink(link.data.id);
-					//markerLabel.attr('fill', 'red');
-					//console.log('link hover out');
+					//unHighlightLink(link);
 				});
 				
 				$(linkPath).click(function() { // MOUSE CLICK
-					//console.log('link click');
-					toggleLink(link.data.id);
+					showLinkDetails(link);
+					toggleLink(link);
 				});
 				
 				link.data.UI.fullUI = ui;
@@ -3052,9 +3085,7 @@
 				var curvex = (to.x)/2; //...the middle point x
 				var curvey = (to.y)/2 + skew;//...the middle point y
 				linkUI.attr('transform','translate(' +fromPos.x + ',' + fromPos.y + ')');
-				
-				//console.log(dataLink.data);
-				//var linkPath = dataLink.data.UI.pathUI;
+
 				var linkPath = linkUI.children[LINK_INDEX_0];
 				for (var i = 0; i < linkUI.children.length; i++)
 				{
@@ -3127,18 +3158,6 @@
 			graphContainer.style.background=currentTheme.graphBackground;
 			//detailsUI = addWindowNode();
 			if (currentTheme.backgroundImage!=null){graphContainer.style['background-image'] =  'url('+currentTheme.backgroundImage+')'};
-				//console.log('graph');
-				//console.log(graph);
-				//console.log('layout');
-				//console.log(layout);
-				//console.log('renderer');
-				//console.log(renderer);
-				//console.log('graphics');
-				//console.log(graphics);
-				//console.log('graphRect');
-				//console.log(graphics.getGraphRect());
-				//console.log('getBBox');
-				//console.log(layout.simulator.getBBox());
 				
 //=========== ANIMATION ==========================================================================================================================================================================
 		
@@ -3339,11 +3358,9 @@
 			background-opacity: 0.5;
 			border-radius:15px;
 			text-align: center;
-			//height: 100px;
-			//max-height: 50px;
 		  }
 		  .clearfix {
-			overflow: auto;
+			//overflow-y: scroll;
 		  }
 		  
 		  
@@ -3358,7 +3375,7 @@
 			color: deepskyblue;
 			background-color:#1a1a1a;
 			border-radius:10px;
-			background-opacity:0.8;
+			//background-opacity:0.8;
 			font-family:"Palatino Linotype", "Book Antiqua", Palatino, serif;
 			//font-family: Arial, Helvetica, sans-serif;
 			//font-family: Verdana;
@@ -3367,9 +3384,10 @@
 			//font-weight: bold;
 			//font-family:"Lucida Console", Monaco, monospace;
 			letter-spacing: 0px;
+			opacity:0.9;
 		  }
 		  .clearfix {
-			overflow: auto;
+			//overflow-y: scroll;
 		  }
 		  .panelheader {
 			margin:0px;
@@ -3389,15 +3407,18 @@
 			}
 			.labelDisplay
 			{
+				overflow-y: auto;
+				overflow-x: hidden;
 				max-height: 200px;
 			}
 		  
 		  #leftColumn {
 			left:10px;
-			width:230px;
+			width:250px;
 			margin:0px;
 			padding:0px;
 			border-width:0px;
+			max-height: 100%;
 			overflow: auto;
 			position: fixed;
 		  }
@@ -3408,7 +3429,8 @@
 			margin:0px;
 			padding:0px;
 			border-width:0px;
-			//overflow: hidden;
+			overflow: auto;
+			max-height: 100%;
 			position: fixed;
 		  }
 		  
@@ -3424,7 +3446,7 @@
 			position: fixed;
 		  }
 		  .clearfix {
-			overflow: none;
+			//overflow: none;
 		  }
 button {
     background-color: #b3b3b3; 
@@ -3648,16 +3670,21 @@ hr {
 	</div>
 	
 	<div id='leftColumn'>
-		<div class="labelDisplay toolPanel" style='overflow:auto;'>
+		<div class="labelDisplay toolPanel">
 			<span id="availableLabels" class="label"></span>
 		</div>
 		
 		<div class='toolPanel'>
 			<div id='selectedNode'></div>
+			<hr>
+			<div id='nodeDetails'>
+			</div>
 		</div>
 		
 		<div class='toolPanel'>
-			<div id='nodeDetails'>
+			<div id='selectedLink'></div>
+			<hr>
+			<div id='linkDetails'>
 			</div>
 		</div>
 		
@@ -3724,7 +3751,7 @@ hr {
 			
 		</div>
 		
-		<div class='toolPanel' id='panelViewOptions'>
+		<div class='toolPanel labelDisplay' id='panelViewOptions'>
 			<div id='newNode'>
 			  <div class="panelheader">Monitored Nodes</div>
 			  <table id='nodelist.monitored'>

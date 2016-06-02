@@ -8,25 +8,30 @@ var jsonObject = {
 	"startupOptions":{
 		"startupSearch":[
 			/*{"label":"SOME_LABEL"*/
-			{"label":"host"},
-			{"label":"service"},
-			{"label":"ipv4network"},
-			{"label":"site"}
+			{"label":"SCHEMA_ROOT"},
+			//{"label":"ROOT"},
+			//{"label":"host"},
+			//{"label":"service"},
+			//{"label":"ipv4network"},
+			//{"label":"site"}
 		],
 		"nodeDisplayValues":[
 			/*{"label":"SOME_LABEL", displayField??label, displayLabel??label},*/
-			{"label":"host", "displayField":"name"},
-			{"label":"service", "displayField":"name"},
-			{"label":"ipv4network", "displayField":"name"},
-			{"label":"site", "displayField":"name"}
+			{"label":"Determiner", displayField:"name"}
 		],
 		"nodeDisplayBody": [
 			/*{"label":"SOME_LABEL", "image":"IMAGE_URL"??none, "color":"HEXVALUE"??auto, "labelPos":"above/under/left/right"??center},*/
-			{"label":"host", "image":"custom/server.svg", "color":"transparent", "labelPos":"right"},
+			{"label":"host", "labelPos":"right"},
 			{"label":"service", "image":"custom/binoculars.svg", "labelPos":"right", "color":"transparent"},
 			{"label":"site", "image":"custom/placeholder.svg" },
-			{"label":"ipv4network", "image":"custom/network.svg" }
+			{"label":"ipv4network"},
+			
+		],
+		"linkDisplayValues":[
+			/*{"label":"SOME_LABEL", displayField??label, displayLabel??label},*/
+			{"labelFrom":"SCHEMA_ROOT", "labelTo":"Test4", "type":"TEST", "displayField":"prop2"},
 		]
+		
 	},
 	"viewOptions":{
 		"panels":[
@@ -35,23 +40,25 @@ var jsonObject = {
 	
 	},	
 	"displaySettings":{
-			"backgroundImage":null, /*set to null for nothing*/
+			"backgroundImage":null, /*URL or, set to null for nothing*/
 			"usePrebuiltTheme":false, /*set to false to use the settings in this file instead(below)*/
 			"prebuiltThemeIndex":3,
 			"entityRgbRange":{"min":40,"max":140},/*The 4bit rgb range from which label colors can be automatically generated.*/
 			"showRelationships":"on-highlight",/*showRelationships: "all/on-highlight/none" */
-			"showRelationProperties": "inline",
+			"showRelationProperties": false,
 			"showLabels":true,
 			"graphBackground":"#0e1a25",
 			"entityLabelColor":"white",
-			"opaque":false,
+			"entityBorderColor":null, /*null=auto-color*/
+			"opaque":true,
 			"labelSizing":"fontsize", /*choices: "hyphenate" (make labels shorter) "fontsize" (make the font size smaller) "" (no sizing, labels may extend past the boundaries of the node)*/
 			"shadow":false, /*...outer node shadow*/
 			"glow":false, /*...outer node glow*/
 			"linkColor":"#21415f", /*...html/hex color*/
 			"rounded":false, /*...inner node shadow*/
-			"loadRelationPopouts":true,
-			"loadNodePopouts":true
+			"loadRelationPopouts":false,
+			"loadNodePopouts":false
+			
 		}
 	}
 }
