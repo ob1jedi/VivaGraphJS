@@ -47,7 +47,7 @@ var jsonObject = {
 			"showRelationships":"on-highlight",/*showRelationships: "all/on-highlight/none" */
 			"showRelationProperties": false,
 			"showLabels":true,
-			"graphBackground":"#0e1a25",
+			"graphBackground":"#0e1a25", //"linear-gradient(#002533, #00384d)", //"#0e1a25",
 			"entityLabelColor":"white",
 			"entityBorderColor":null, /*null=auto-color*/
 			"opaque":true,

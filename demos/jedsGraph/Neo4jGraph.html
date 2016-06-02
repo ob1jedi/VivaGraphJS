@@ -65,12 +65,13 @@
 						.attr('r',50)
 						.attr('fill','transparent')//'#4dffc3')
 						.attr('stroke','red')
+						//.attr('filter','url(#shadowEffect)') //shadow
 						if (!currentTheme.opaque) {CommonUI.focusUI.attr('stroke-opacity','0.5')}
 						
 		CommonUI.linkFocusUI = Viva.Graph.svg('path')
 						   .attr('stroke', 'red')
                            .attr('stroke-width', '5')
-						
+						   
 		CommonUI.checkUI = Viva.Graph.svg('circle')
 						.attr('cx', 0) //...for circle
 						.attr('cy', 0)//...for circle
@@ -78,7 +79,9 @@
 						.attr('fill','transparent')//'#4dffc3')
 						.attr('stroke','#99ff33')
 						.attr('stroke-width', '5')
+						//.attr('filter','url(#shadowEffect)') //shadow
 						if (!currentTheme.opaque) {CommonUI.focusUI.attr('stroke-opacity','0.5')}
+						
 		//MARKER: TEXT
 		CommonUI.linkMidMarker = Viva.Graph.svg('marker')
 			.attr('class', 'markertextmain')
@@ -752,10 +755,11 @@
 		}
 		function getDataLinks(fromNodeID, toNodeID)
 		{
+		
 			var x = [];
 				linkList.forEach(function(link, index){
-				if ((link.data.fromNodeID == fromNodeID && link.data.toNodeID == toNodeID) ||
-					(link.data.toNodeID == fromNodeID && link.data.fromNodeID == toNodeID)){
+				if ((link.fromId == Number(fromNodeID) && link.toId == Number(toNodeID)) ||
+					(link.toId == Number(fromNodeID) && link.fromId == Number(toNodeID))){
 					x.push(link);
 				}
 			});
@@ -1211,6 +1215,8 @@
 
 					//link R...
 					var linkdata = new datay();
+					linkdata.fromNodeID = row[I_N_ID];
+					linkdata.toNodeID = row[I_M_ID];
 					linkdata.id = row[I_R_ID];
 					linkdata.name = row[I_R_LABELS];
 					linkdata.properties = new neoPropertyList(row[I_R_PROPS]);
@@ -1258,6 +1264,8 @@
 					var I_R_PROPS = 4;
 					//Node N...
 					var dat = new datay;
+					dat.fromNodeID = row[I_N_ID];
+					dat.toNodeID = row[I_M_ID];
 					dat.id =row[I_R_ID];
 					if (row[I_R_TYPE]){dat.name = row[I_R_TYPE];}
 					if (row[I_R_PROPS]){dat.properties = new neoPropertyList(row[I_R_PROPS]);}
@@ -1329,7 +1337,6 @@
 				link.data.toNodeID = toNodeID;
 				link.data.displayLabel = linkData.name;
 				linkList.push(link); //new linkType(fromNodeID,toNodeID, linkData, linkData.id)); 
-				
 			}
 
 			var toNode = GRAPH.getNode(toNodeID);
@@ -1348,7 +1355,7 @@
 				}			
 			});
 			refreshLinkVisual(link);
-
+//jed
 			if (bIsNew)
 			{
 				toNode.data.fromLinks.push(link);
@@ -1881,6 +1888,8 @@
 							for (var d = 0; d < result.data.length; d++){
 								var row = result.data[d].row;
 								var linkdata = new datay();
+								linkdata.fromNodeID = row[0];
+								linkdata.toNodeID = row[1];
 								linkdata.id = row[2];
 								linkdata.name = row[3];
 								linkdata.properties = new neoPropertyList(row[4]);
@@ -3055,7 +3064,7 @@
 				ui.attr('fromNode',link.data.fromNodeID).attr('toNode',link.data.toNodeID);
 				ui.attr('linkDataId',link.data.id);
 				ui.attr('linkIndex', getDataLinks(link.data.fromNodeID, link.data.toNodeID).length);
-			
+			//jed
 				return ui;   
             })
 			
@@ -3115,6 +3124,7 @@
 				var data = 'M '+0+' '+0+' L '+curvex + ' '+curvey + ' L '+to.x + ','+to.y;
 				//For curvey lines, but marker won't show...
 				//var data = 'M '+0+' '+0+' q '+curvex + ' '+curvey + ' ' + to.x + ' ' + to.y;
+				
 				linkPath.attr("d", data);			
 
             });
