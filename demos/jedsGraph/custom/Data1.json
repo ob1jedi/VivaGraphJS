@@ -1,63 +1,82 @@
 var jsonObject = {
-"Configuration":{
-	"neo4jconnection":
-		{	"server":"http://localhost:7474",
-			"username":"neo4j",
-			"password":"Password@123456"
+Configuration:{
+	neo4jconnection:
+		{	server:"http://localhost:7474",
+			username:"neo4j",
+			password:"Password@123456"
 		},
-	"startupOptions":{
-		"startupSearch":[
+	startupOptions:{
+		startupSearch:[
 			/*{"label":"SOME_LABEL"*/
-			{"label":"SCHEMA_ROOT"},
+			{label:"Person"},
 			//{"label":"ROOT"},
 			//{"label":"host"},
 			//{"label":"service"},
 			//{"label":"ipv4network"},
 			//{"label":"site"}
 		],
-		"nodeDisplayValues":[
+		nodeDisplayValues:[
 			/*{"label":"SOME_LABEL", displayField??label, displayLabel??label},*/
-			{"label":"Determiner", displayField:"name"}
+			{label:"Determiner", displayField:"name"}
 		],
-		"nodeDisplayBody": [
-			/*{"label":"SOME_LABEL", "image":"IMAGE_URL"??none, "color":"HEXVALUE"??auto, "labelPos":"above/under/left/right"??center},*/
-			{"label":"host", "labelPos":"right"},
-			{"label":"service", "image":"custom/binoculars.svg", "labelPos":"right", "color":"transparent"},
-			{"label":"site", "image":"custom/placeholder.svg" },
-			{"label":"ipv4network"},
+		nodeDisplayBody: [
+			/*{"label":"SOME_LABEL", "image":"IMAGE_URL"??none, "color":"HEXVALUE"??auto, "size":30, "labelPos":"above/under/left/right"??center},*/
+			{label:"host", labelPos:"right"},
+			{label:"service", image:"custom/binoculars.svg", labelPos:"right", color:"transparent"},
+			{label:"site", image:"custom/placeholder.svg" },
+			{label:"ipv4network", size:50},
 			
 		],
-		"linkDisplayValues":[
+		linkDisplayValues:[
 			/*{"label":"SOME_LABEL", displayField??label, displayLabel??label},*/
-			{"labelFrom":"SCHEMA_ROOT", "labelTo":"Test4", "type":"TEST", "displayField":"prop2"},
+			{labelFrom:"SCHEMA_ROOT", labelTo:"Test4", type:"TEST", displayField:"prop2"},
 		]
 		
 	},
-	"viewOptions":{
-		"panels":[
-			{"name":"panelSelectionOptions", "parent":"leftColumn", "visible":true}
-		]
-	
-	},	
-	"displaySettings":{
-			"backgroundImage":null, /*URL or, set to null for nothing*/
-			"usePrebuiltTheme":false, /*set to false to use the settings in this file instead(below)*/
-			"prebuiltThemeIndex":3,
-			"entityRgbRange":{"min":40,"max":140},/*The 4bit rgb range from which label colors can be automatically generated.*/
-			"showRelationships":"on-highlight",/*showRelationships: "all/on-highlight/none" */
-			"showRelationProperties": false,
-			"showLabels":true,
-			"graphBackground":"#0e1a25", //"linear-gradient(#002533, #00384d)", //"#0e1a25",
-			"entityLabelColor":"white",
-			"entityBorderColor":null, /*null=auto-color*/
-			"opaque":true,
-			"labelSizing":"fontsize", /*choices: "hyphenate" (make labels shorter) "fontsize" (make the font size smaller) "" (no sizing, labels may extend past the boundaries of the node)*/
-			"shadow":false, /*...outer node shadow*/
-			"glow":false, /*...outer node glow*/
-			"linkColor":"#21415f", /*...html/hex color*/
-			"rounded":false, /*...inner node shadow*/
-			"loadRelationPopouts":false,
-			"loadNodePopouts":false
+	viewOptions:{
+		panels:[
+			{name:"panelSelectionOptions", parent:"leftColumn", visible:true}
+		],
+		indicators:{
+			relations:"ifany"
+		},
+		nodeSizing:"relationCount" /*relationCount/outRelationCount/inRelationCount(increase node size based on relationships)*/
+	},
+	monitoringOptions: {
+			pollInterval:1 /*in seconds*/
+	},
+	displaySettings:{
+			backgroundImage:null, /*URL or, set to null for nothing*/
+			graphBackground:"linear-gradient(#002533, #00384d, #002533)", //"linear-gradient(#002533, #00384d)", //"#0e1a25",
+			
+			usePrebuiltTheme:false, /*set to false to use the settings in this file instead(below)*/
+			prebuiltThemeIndex:3,
+			
+			entityRgbRange:{min:40,max:140},/*The 4bit rgb range from which label colors can be automatically generated.*/			
+			entityLabelColor:"white",
+			entityBorderColor:null, /*null=auto-color*/
+			
+			linkColor:"#0d0d0d", /*...html/hex color*/
+			linkMainTextColor:"#d9d9d9",
+			linkSubTextColor:"#4d0000",
+			linkThickness: 3,
+			
+			opaque:false,
+			labelSizing:"fontsize", /*choices: "hyphenate" (make labels shorter) "fontsize" (make the font size smaller) "" (no sizing, labels may extend past the boundaries of the node)*/
+			
+			/*effects...*/
+			haze:false, /*...outer node haze*/
+			shadow:false, /*...outer node shadow*/
+			glow:false, /*...outer node glow*/
+			rounded:false, /*...inner node shadow*/
+			
+			//node data...
+			showLabels:true,
+			loadNodePopouts:true,
+			//link data
+			showRelationships:"on-highlight",/*showRelationships: "all/on-highlight/none" */
+			loadRelationPopouts:false,
+			showRelationProperties: false
 			
 		}
 	}
