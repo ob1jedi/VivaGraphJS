@@ -29,7 +29,7 @@ Configuration:{
 		],
 		linkDisplayValues:[
 			/*{"label":"SOME_LABEL", displayField??label, displayLabel??label},*/
-			{labelFrom:"SCHEMA_ROOT", labelTo:"Test4", type:"TEST", displayField:"prop2"},
+			{labelFrom:"Person", labelTo:"Car", type:"TEST", displayField:"Age"},
 		]
 		
 	},
@@ -58,7 +58,7 @@ Configuration:{
 			
 			linkColor:"#0d0d0d", /*...html/hex color*/
 			linkMainTextColor:"#d9d9d9",
-			linkSubTextColor:"#4d0000",
+			linkSubTextColor:"#ffa64d",
 			linkThickness: 3,
 			
 			opaque:false,
@@ -66,6 +66,7 @@ Configuration:{
 			
 			/*effects...*/
 			haze:false, /*...outer node haze*/
+			highlightHaze:true, /*...outer node haze*/
 			shadow:false, /*...outer node shadow*/
 			glow:false, /*...outer node glow*/
 			rounded:false, /*...inner node shadow*/
@@ -73,6 +74,7 @@ Configuration:{
 			//node data...
 			showLabels:true,
 			loadNodePopouts:true,
+			
 			//link data
 			showRelationships:"on-highlight",/*showRelationships: "all/on-highlight/none" */
 			loadRelationPopouts:false,

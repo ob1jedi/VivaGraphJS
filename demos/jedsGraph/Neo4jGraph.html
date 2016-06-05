@@ -36,6 +36,7 @@
 		var selectedNode = '';
 		var selectedNodeUI = '';
 		var bRelate = false;
+		var bPlanRelate = false;
 		var counter = 10;	
 		var detailsUI;
 		var detailsNode;
@@ -299,6 +300,7 @@
 			currentTheme.showRelationships = config.displaySettings.showRelationships;
 			currentTheme.showRelationProperties = config.displaySettings.showRelationProperties;
 			currentTheme.haze = config.displaySettings.haze;
+			currentTheme.highlightHaze = config.displaySettings.highlightHaze;
 			currentTheme.linkMainTextColor = config.displaySettings.linkMainTextColor;
 			currentTheme.linkSubTextColor = config.displaySettings.linkSubTextColor;
 			startupLabels = [];
@@ -342,7 +344,8 @@
 							.attr('fill','transparent')//'#4dffc3')
 							.attr('stroke','#99ff33')
 							.attr('stroke-width', '5')
-							if (!currentTheme.opaque) {CommonUI.focusUI.attr('stroke-opacity','0.5')}
+							if (!currentTheme.opaque) {CommonUI.checkUI.attr('stroke-opacity','0.5')}
+							if (currentTheme.highlightHaze) {CommonUI.checkUI.attr('filter','url(#hazeEffect)');}
 							
 			//MARKER: TEXT
 			CommonUI.linkMidMarker = Viva.Graph.svg('marker')
@@ -403,7 +406,7 @@
 				checkTimeoutElements(); 
 			}, 1000);
 		}
-
+		
 		
 		function removeMonitoredNode(nodeid)
 		{
@@ -467,7 +470,7 @@
 				monitorNode(node);
 			});	
 			//add links...
-			console.log(checkedLinks);
+			//console.log(checkedLinks);
 			checkedLinks.forEach(function (link){
 				monitorLink(link);
 			});
@@ -592,8 +595,6 @@
 		function testFunction(){
 			var x = function callback(){};
 			Neo4j_getRelationCount(selectedNodeID, x);
-			//console.log(layout.simulator.getBBox());
-			//console.log(layout.getGraphRect());
 		}
 		
 		function animateTest(node)
@@ -1118,6 +1119,7 @@
 			var scope = selectType.split('.');
 			if (scope[2] == 'entity'){
 				//get properties...
+				document.getElementById('qbuilder.' + scope[1] + '.value').value = '';
 				var childElementName = 'qbuilder.'+scope[1]+'.property';
 				var propertyElement = document.getElementById(childElementName);
 				propertyElement.innerHTML = '<option value=""></option>';
@@ -1140,6 +1142,7 @@
 			}
 			if (scope[2] == 'property'){
 				var childElementName = 'qbuilder.' + scope[1] + '.selectvalue';
+				document.getElementById('qbuilder.' + scope[1] + '.value').value = '';
 				var selectedEntity = document.getElementById('qbuilder.'+scope[1]+'.entity').value;
 				var selectedProperty = document.getElementById('qbuilder.'+scope[1]+'.property').value;
 				childElementName.innerHTML = '<option value=""></option>';
@@ -1166,6 +1169,7 @@
 			var fromEntity = document.getElementById('qbuilder.from.entity').value;
 			var fromProperty = document.getElementById('qbuilder.from.property').value;
 			var fromValue = document.getElementById('qbuilder.from.value').value;
+			//document.getElementById('qbuilder.from.value').value = '';
 			var propertyBlock = (fromProperty)?'{'+fromProperty+':'+parseDataType(fromValue)+'}':'';
 			
 			var command = 'MATCH (n:'+fromEntity + propertyBlock + ') RETURN id(n), labels(n), n';
@@ -1276,13 +1280,14 @@
 			Neo4j_Command([command], callback);
 		}
 		
-		function Neo4j_CreateRelation(nodeID1, nodeID2)
+		function Neo4j_CreateRelation(nodeID1, nodeID2, planOnly)
 		{
 			var relationName = document.getElementById('new.relation.name').value;
 			if (!relationName || relationName == ''){alert('Save failed!\nNo relation name specified.'); return;}
 			var propIndex = 0;
 			var propertyElement = document.getElementById('new.relation.property.key.' + propIndex);
 			var propList = '';
+
 			while (propertyElement)
 			{
 				var propertyValueElement = document.getElementById('new.relation.property.value.' + propIndex);
@@ -1294,9 +1299,16 @@
 			}
 			if (propList != '') {propList = '{' + propList + '}';}
 
-			var callback = function(nodesResult){Neo4j_fetchRelation(nodeID1, nodeID2);}
-			var command = 'MATCH (n) WHERE ID(n) = ' + nodeID1 + ' MATCH (m) WHERE ID(m) = '+ nodeID2 + ' CREATE (n)-[r:'+ relationName + propList +']->(m) RETURN id(startnode(r)), labels(startnode(r)), startnode(r) , id(r), type(r), r, id(endnode(r)), labels(endnode(r)), endnode(r)'
-			Neo4j_Command([command], callback);
+			if (!planOnly)
+			{
+				var callback = function(nodesResult){Neo4j_fetchRelation(nodeID1, nodeID2);}
+				var command = 'MATCH (n) WHERE ID(n) = ' + nodeID1 + ' MATCH (m) WHERE ID(m) = '+ nodeID2 + ' CREATE (n)-[r:'+ relationName + propList +']->(m) RETURN id(startnode(r)), labels(startnode(r)), startnode(r) , id(r), type(r), r, id(endnode(r)), labels(endnode(r)), endnode(r)'
+				Neo4j_Command([command], callback);
+			}
+			else
+			{
+				addPlannedLink(nodeID1, nodeID2, relationName, propList)
+			}
 		}
 		
 		/*
@@ -1423,16 +1435,35 @@
 			
 			var updatedProperties = [];
 			propListFrom.forEach(function(fromProp){				
+				var foundProp = false;
 				propListTo.forEach(function(toProp){
 					if (fromProp.key == toProp.key){
+						foundProp = true;
 						if (fromProp.value != toProp.value)
 						{
-							updatedProperties.push(toProp);
+							updatedProperties.push({property:toProp, updateType:'update'});
 						}
 					}
 						
 				})
+				if (!foundProp){ //toProps did not have the property, the property must have been deleted.
+					updatedProperties.push({property:fromProp, updateType:'delete'});
+				}
 			});
+			
+			//check for new properties (will be in the ToList but not the FromList)
+			propListTo.forEach(function(toProp){
+				var foundProp = false;
+				propListFrom.forEach(function(fromProp){
+					if (fromProp.key == toProp.key){
+						foundProp = true;
+					}
+				});
+				if (!foundProp){ //fromProps did not have the property, the property must be new.
+					updatedProperties.push({property:toProp, updateType:'create'});
+				}
+			});
+			
 			return updatedProperties;
 		}
 		
@@ -1488,7 +1519,22 @@
 				}
 			});
 		}
-				
+		
+		function addPlannedLink(fromNodeID, toNodeID, linkName, linkProperties)
+		{
+			var plannedLinkData = new datay()
+			plannedLinkData.fromNode = fromNodeID;
+			plannedLinkData.toNode = toNodeID;
+			plannedLinkData.id = fromNodeID + '_' + toNodeID + ' ' + linkName;
+			plannedLinkData.name = linkName;
+			plannedLinkData.displayLabel = linkName;
+			plannedLinkData.linkType = 'planned';
+			//plannedLinkData.properties = linkProperties;
+			plannedLinkData.color = 'red';
+			link = GRAPH.addLink(fromNodeID, toNodeID, plannedLinkData);
+			linkList.push(link);
+		}
+		
 		function addDataLink(fromNodeID, toNodeID, linkData)
 		{
 			var bIsNew = false;
@@ -1924,7 +1970,6 @@
 					}
 				}	
 			};
-			//console.log(command);
 			Neo4j_Command([command], callback2);	
 			
 			//jed
@@ -2258,6 +2303,10 @@
 					
 		function relateSelectedToNode(){
 			bRelate = true;
+		}
+		
+		function planRelateSelectedToNode(){
+			bPlanRelate = true;
 		}
 		
 		function fontGrow()
@@ -2747,6 +2796,15 @@
 					}
 					bRelate=false;
 			   }
+			   
+			   if (bPlanRelate==true)
+			   {
+					if (nodeId != selectedNodeID){
+						Neo4j_CreateRelation(selectedNodeID, nodeId, true)
+					}
+					bPlanRelate=false;
+			   }
+			   
 		   }
 		   //nodeUI = graphics.getNodeUI(nodeId);
 		   var node = GRAPH.getNode(nodeId);
@@ -2921,6 +2979,9 @@
                     if (!currentTheme.opaque) {popoutBody.attr('fill-opacity',0.3);}
 					
 					
+					//var defs = graphics.getSvgRoot().append('defs');
+					//defs.append(midMarker);
+						
 					var visDefs = '<defs>';
 					visDefs += '<filter id="hazeEffect" x="-1" y="-1" width="300%" height="300%"><feOffset result="offOut" in="FillPaint" dx="0" dy="0" /><feGaussianBlur result="blurOut" in="offOut" stdDeviation="10" /><feBlend in="SourceGraphic" in2="blurOut" mode="normal" /></filter>';
 					visDefs += '<filter id="shadowEffect" x="-1" y="-1" width="300%" height="300%"><feOffset result="offOut" in="SourceAlpha" dx="20" dy="20" /><feGaussianBlur result="blurOut" in="offOut" stdDeviation="10" /><feBlend in="SourceGraphic" in2="blurOut" mode="normal" /></filter>';
@@ -3133,6 +3194,120 @@
 					ui.attr('nodeid',node.id);
 				}
 				
+				//====== PLANNED NODES ========================================================================================================
+				if (node.data.nodeType == 'planned')
+				{
+					var nodeConfig = node.data.config.nodeDisplayBody;
+					if(nodeConfig.color){node.data.nodeColor = nodeConfig.color;}
+
+					nodeBody = Viva.Graph.svg('circle')
+						.attr('cx', 0)//...for circle
+						.attr('cy', 0)//...for circle
+						.attr('r', node.data.nodeSize) //...for circle
+						.attr('fill',node.data.nodeColor)//node.data.nodeColor)//'#4dffc3')
+						.attr('stroke-width',3)
+						.attr('stroke', currentTheme.entityBorderColor==null?node.data.nodeBorderColor:currentTheme.entityBorderColor)
+						//.attr('stroke-opacity',0.5);
+						if (currentTheme.haze) {nodeBody.attr('filter','url(#hazeEffect)');} //haze
+						if (currentTheme.rounded) {nodeBody.attr('fill','url(#gradRound)');}
+						if (!currentTheme.opaque) {nodeBody.attr('fill-opacity',node.data.nodeOpacity);}
+					
+					nodeBodyImage = Viva.Graph.svg('image')
+						.attr('x', -node.data.nodeSize)
+						.attr('y', -node.data.nodeSize)
+						.attr('rx', node.data.nodeSize)
+						.attr('width', node.data.nodeSize * 2)
+						.attr('height', node.data.nodeSize * 2)
+						.link(nodeConfig.image?nodeConfig.image:'');
+						if (currentTheme.rounded) {nodeBodyImage.attr('fill','url(#gradRound)');}
+						if (!currentTheme.opaque) {nodeBodyImage.attr('fill-opacity',node.data.nodeOpacity);}
+						
+					//Text elements...
+					displayText = Viva.Graph.svg('text')
+						.attr('y', 0) 
+						.attr('x', 0)
+						.attr('fill',currentTheme.entityLabelColor)
+						.attr('stroke-width','0')
+						.attr('font-family','Arial, Helvetica, sans-serif')
+						.attr('font-size','20')
+						.text(node.data.displayLabel);
+						
+					popoutText = Viva.Graph.svg('text')
+						.attr('class', 'slideText')
+						.attr('y', -node.data.nodeSize) //node.data.nodeSize/2 + 5)
+						.attr('x', 0)// - node.data.displayLabel.length)
+						.attr('fill','#0077b3')
+						.attr('stroke-width','0')
+						.attr('font-family','Arial, Helvetica, sans-serif')
+						.attr('font-size','10')
+						.text('--');
+					popoutText.innerHTML = propertyListToSvgList(node.data.properties, '<tspan x="50" dy="1.2em">', '</tspan>');
+
+					popoutBody = Viva.Graph.svg('rect')
+                        .attr('class', 'slideout')
+                        .attr('x', node.data.nodeSize/2)
+                        .attr('y', -node.data.nodeSize)
+                        .attr('rx', node.data.nodeSize/4)
+                        .attr('height', 0)
+						.attr('fill','#141414')
+                    if (!currentTheme.opaque) {popoutBody.attr('fill-opacity',0.3);}
+					
+					
+					//var defs = graphics.getSvgRoot().append('defs');
+					//defs.append(midMarker);
+						
+					var visDefs = '<defs>';
+					visDefs += '<filter id="hazeEffect" x="-1" y="-1" width="300%" height="300%"><feOffset result="offOut" in="FillPaint" dx="0" dy="0" /><feGaussianBlur result="blurOut" in="offOut" stdDeviation="10" /><feBlend in="SourceGraphic" in2="blurOut" mode="normal" /></filter>';
+					visDefs += '<filter id="shadowEffect" x="-1" y="-1" width="300%" height="300%"><feOffset result="offOut" in="SourceAlpha" dx="20" dy="20" /><feGaussianBlur result="blurOut" in="offOut" stdDeviation="10" /><feBlend in="SourceGraphic" in2="blurOut" mode="normal" /></filter>';
+					//visDefs += '<radialGradient id="gradGlow" cx="50%" cy="50%" r="50%" fx="50%" fy="50%"><stop offset="0%" style="stop-color:#ffffff; stop-opacity:1" /><stop offset="100%" style="stop-color:#66e0ff;stop-opacity:0" /></radialGradient>';
+					visDefs += '<radialGradient id="gradRound" cx="50%" cy="50%" r="50%" fx="50%" fy="50%"><stop offset="80%" style="stop-color:rgb('+node.data.nodeColorRGB.r+','+node.data.nodeColorRGB.g+','+node.data.nodeColorRGB.b+'); stop-opacity:1" /><stop offset="100%" style="stop-color:rgb('+(node.data.nodeColorRGB.r-100) +','+(node.data.nodeColorRGB.g-100)+','+(node.data.nodeColorRGB.b-100)+');stop-opacity:1" /></radialGradient>';
+					visDefs += '</defs>'; 
+					ui.innerHTML = visDefs;
+					
+					
+					node.data.UI.fullUI = ui;
+					node.data.UI.bodyUI = nodeBody;
+					node.data.UI.imageUI = nodeBodyImage;
+					node.data.UI.displayTextUI = displayText;
+					node.data.UI.popoutBodyUI = popoutBody;
+					node.data.UI.popoutTextUI = popoutText;
+
+					//if (currentTheme.loadNodePopouts){ui.append(node.data.UI.bodyUI);}//else{ui.append(rectblank);}
+					if (currentTheme.loadNodePopouts){ui.append(node.data.UI.popoutBodyUI);}
+					ui.append(node.data.UI.bodyUI);
+					if (nodeConfig.image){ui.append(node.data.UI.imageUI);}
+					//ui.append(node.data.UI.focusUI);
+					if (currentTheme.showLabels){ui.append(node.data.UI.displayTextUI);}
+					if (currentTheme.loadNodePopouts){ui.append(node.data.UI.popoutTextUI);}
+					
+				//NODE EVENTS
+					// events (http://www.w3.org/TR/SVG/interact.html#SVGEvents ),
+					// including mouse events:
+					$(ui).mousedown(function() { // MOUSE CLICK
+						highlightSelectedNode(node.id);
+						layout.pinNode(node, true);
+						node.data.isPinned = true;
+					}),
+					//$(ui).mousedown(function() { // MOUSE CLICK
+						//detailsUI.text = node.data.properties[0];
+						//refreshNodeAppearance(detailsUI.attr('nodeid'));				
+					//}),
+					$(ui).dblclick(function() { // MOUSE CLICK
+						Neo4j_fetchEntitiesForNode();				
+					}),
+					$(ui).hover(function() { // MOUSE HOVER
+						if (viewOptions.highlightRelated){highlightRelatedNodes(node.id, true);}
+						if (viewOptions.highlightdescendants){highlightdescendantNodes(node.id, true);}
+						if (viewOptions.highlightAncestors){highlightAncestorNodes(node.id, true);}
+					}, function() { // mouse out
+						if (viewOptions.highlightRelated){highlightRelatedNodes(node.id, false);}
+						if (viewOptions.highlightdescendants){highlightdescendantNodes(node.id, false);}
+						if (viewOptions){highlightAncestorNodes(node.id, false);}
+					});
+					ui.attr('class','node');
+					ui.attr('nodeSize',node.data.nodeSize);
+					ui.attr('nodeid',node.id);
+				}
 				ui.attr('nodetype',node.data.nodeType);
                 return ui;
             });
@@ -3414,7 +3589,31 @@
 					ui.attr('labelWidth',30);//default
 					ui.attr('labelVisible',false);//default
 				}	
+				//====== planned LINKS ========================================================================================================
+				else if(link.data.linkType == 'planned')
+				{
+					var linklabelId = link.data.id;//'link'+link.fromId + 'To' + link.toId;
 
+					var linkPath;
+					var ui = Viva.Graph.svg('g')
+					.attr('class','link')
+					var linkPath = Viva.Graph.svg('path')
+							   .attr('id',linklabelId)
+							   .attr('stroke', link.data.color)
+							   .attr('stroke-width', 5)
+							   .attr("fill", 'transparent');
+							   if (!currentTheme.opaque) {linkPath.attr('stroke-opacity', 0.5);}
+
+					ui.append(linkPath);
+					link.data.UI.fullUI = ui;
+					link.data.UI.pathUI = linkPath;
+					ui.attr('fromNodeRadius',25); //default
+					ui.attr('toNodeRadius',25);//default
+					ui.attr('labelWidth',30);//default
+					ui.attr('labelVisible',false);//default
+					
+				}
+				
 				ui.attr('linkType', link.data.linkType);
 				return ui;   
             })
@@ -3500,6 +3699,7 @@
 					linkList[Number(linkDataIndex)].data.UI.toMarkerUI.attr('refX', rad);
 				}
 				
+				if (linkUI.attr('linkType') == 'planned'){linkPath.attr("stroke-dasharray", "5,5");}
 				//if (linkUI)
 				//linkPath.attr("stroke-dasharray", "0,40,50, 2, 10");
             
@@ -4052,7 +4252,7 @@ hr {
 			<tr >
 				<td>where:</td>
 				<td>
-				<select  onchange="Neo4j_qbuilder('qbuilder.from.property')" id="qbuilder.from.property"></select>
+				<select onchange="Neo4j_qbuilder('qbuilder.from.property')" id="qbuilder.from.property"></select>
 				</td>
 			</tr>
 			<tr>
@@ -4100,8 +4300,8 @@ hr {
 					<div id="hovertext" onclick="clearAllMonitored()">Clear all</div>
 				</div>
 			</button>
-			<button onclick='animateTest()'>Test1</button>
-			<button onclick='testFunction()'>Test2</button>
+			<button onclick='animateTest()'>Add Indicator</button>
+			<!--button onclick='testFunction()'>Test2</button-->
 			
 		</div>
 		
@@ -4223,6 +4423,7 @@ hr {
 			</table>
 			<hr style="border-color:#262626;">
 			<button onclick='relateSelectedToNode()'>Create Relation To...</button>
+			<button onclick='planRelateSelectedToNode()'>Plan Relation To...</button>
 		</div>
 
 		<div class='toolPanel'>
@@ -4269,6 +4470,15 @@ hr {
 			<div class="panelheader">Data</div>
 			<input id="nodeLabel" type="text" name="lname">
 			<button onclick='getEntityNode()'>Get Entity</button>
+		</div-->
+		
+		<!--div class='toolPanel'>
+			<div> 
+				<div class="panelheader">Planning</div>
+				<button onclick='planEntity()'>create entity</button>
+				<button onclick='unPinAllNodes()'>create relation</button>
+				<button onclick='arrangeBy()'>Arrange</button>
+			</div>
 		</div-->
 		
 		<div class='toolPanel' id='panelSelectionOptions'>
