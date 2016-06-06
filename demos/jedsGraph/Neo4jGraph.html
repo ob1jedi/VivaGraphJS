@@ -16,18 +16,18 @@
 		var LINK_INDEX_0 = 0;
 		var LINK_INDEX_1 = 0;
 		var MARKER_INDEX_0 = 0;
-		
+		var binaryToggle = true;
 		//.....Functional variables.......
 		var labelsList = []; //list of "neoLabel" objects
 		var nodeList = []; //list of "node" objects
 		var monitoredNodes = [];//list of "node" objects
-		var fadedNodes = [];
+		//var fadedNodes = [];
 		var monitoredLinks = []; //list of "link" objects
 		var animUpdateNodes = [];//list of "node" objects
 		var animUpdateLinks = []; //list of "link" objects
 		var checkedNodes = []; //list of "node" objects
 		var checkedLinks = []; //list of "node" objects
-		var highlightedLinks = [];
+		//var highlightedLinks = [];
 		var linkList = []; //list of "link" objects
 		var timeoutElements = []; //list of "timeoutElement" objects
 		
@@ -46,7 +46,7 @@
 		var defaultNeo4jPassword = 'password1234$';
 		var neo4jUserToken = '';
 		var neo4jServerURL = 'http://localhost:7474';
-
+		
 		//......Filter settings.............
 		var viewOptions = new viewOptionsType();
 		var interactionOptions = new interactionOptionsType();
@@ -142,8 +142,12 @@
 		  this.properties = [];
 		  this.toLinks = [];
 		  this.fromLinks = [];
+		  this.totalToLinks = 0; //fetched from database
+		  this.totalFromLinks = 0; //fetched from database
 		  this.toNodes = [];
 		  this.fromNodes = [];
+		  this.subNodes = [];
+		  this.superNodes = [];
 		  this.UI= new nodeUiElements();
 		  this.config = {}
 		  this.config.nodeDisplayBody = {};
@@ -594,7 +598,7 @@
 		
 		function testFunction(){
 			var x = function callback(){};
-			Neo4j_getRelationCount(selectedNodeID, x);
+			Neo4j_getRelationCounts(selectedNodeID, x);
 		}
 		
 		function animateTest(node)
@@ -923,7 +927,7 @@
 			
 			var relativeLinks = node.data.toLinks.concat(node.data.fromLinks);
 			relativeLinks.forEach(function (link){
-				GRAPH.removeLink(link);
+				GRAPH.removeLink(link.id);
 			});
 			GRAPH.removeNode(nodeID);
 		}
@@ -978,8 +982,7 @@
 		
 		function addDataNode(nodeId, nodeData)
 		{
-			
-			//if (GRAPH.getNode(nodeId))return;
+
 			var dataNode = getDataNode(nodeId);
 			var nodeUI;
 			var isNewNode = false;
@@ -1009,7 +1012,7 @@
 					animUpdateNodes.push(dataNode);
 				}
 				else{//no changes have been made to the node...
-					return;
+					return; //NOTE: DO NOT RETURN THE DATA-NODE
 				}
 				//return;
 
@@ -1053,39 +1056,74 @@
 			if (isNewNode){
 				dataNode = addNodeToGraph(nodeId,nodeData);	
 				nodeList.push(dataNode);
-				
-				if (config_ext.viewOptions.indicators.relations=="ifany"){addIndicatorNode(dataNode)};
+				if (config_ext.viewOptions.prefetchCounts==true){
+					var updateIndicatorNode = function (toCount, fromCount){
+						dataNode.data.totalToLinks = toCount;
+						dataNode.data.totalFromLinks = fromCount;
+					}
+					Neo4j_getRelationCounts(dataNode.id, updateIndicatorNode);
+				};
+				return dataNode; //RETURN ONLY IF NODE IS NEW
 			}
-			else{
-				//$(nodeUI).hide().show(0);				
-			}
-			return dataNode;
-			
 		}
 		
-		function addIndicatorNode(parentNode)
-		{			
+		function removeSubNode(subNode, updateSuperNode = false)
+		{
+			if (updateSuperNode == true){
+				subNode.superNodes.forEach(function(superNode,index){
+					if (superNode){
+						superNode.subNodes.map(function(sn, i){
+							if (sn.id == subNode.id) {
+								superNode.subNodes.splice(i,1);
+							}
+						})
+					}
+				})
+			}
 			
-			var updateIndicatorNode = function (count){
-				if (count == 0) {return;}
-				var subNodeData = new datax();
-				subNodeData.nodeSize = 5;
-				subNodeData.nodeType = 'indicator';
-				subNodeData.id = 'sub' + parentNode.id;
-				subNodeData.labels = ['subnode'];
-				subNodeData.nodeColor = 'gray';
-				
-				subNodeData.displayLabel = count;
-				toRelationsNode = addNodeToGraph(subNodeData.id,subNodeData);	
-				var linkData = new datay();
-				linkData.linkType = 'indicator';
-				linkData.color = 'gray';
-				var toRelLink = GRAPH.addLink(parentNode.id, subNodeData.id, linkData);
-				var nodespring = layout.getSpring(parentNode.id, subNodeData.id);
-				nodespring.length = 30;
-				//jed
-			};
-			Neo4j_getRelationCount(parentNode.id, updateIndicatorNode);
+			subNode.data.fromLinks.forEach(function(link){GRAPH.removeLink(link.id)});
+			subNode.data.toLinks.forEach(function(link){GRAPH.removeLink(link.id)});
+			GRAPH.removeNode(subNode.id);			
+		}
+		
+		function addSubNode(parentNode, id, color, displayLabel)
+		{			
+
+			var subNodeData = new datax();
+			subNodeData.nodeSize = 5;
+			subNodeData.nodeType = 'subnode';
+			subNodeData.id = id; //'sub' + parentNode.id;
+			subNodeData.labels = ['subnode'];
+			subNodeData.nodeColor = color;
+			
+			
+			subNodeData.displayLabel = displayLabel;
+			subNodeData.superNodes.push(parentNode);
+			//CREATE NODE
+			var subNode = addNodeToGraph(subNodeData.id,subNodeData);	
+			parentNode.data.subNodes.push(subNode)
+			
+			//popout effect
+			layout.pinNode(subNode, true);
+			var pos = layout.getNodePosition(parentNode.id);
+			//console.log(pos);
+			binaryToggle = !binaryToggle;
+			//layout.setNodePosition(subNode.id, pos.x + 10 * (binaryToggle)?-1:1, pos.y + 10* (binaryToggle)?-1:1);
+			layout.setNodePosition(subNode.id, pos.x + 10 * ((binaryToggle)?-1:1), pos.y + 10* ((binaryToggle)?-1:1));
+			layout.pinNode(subNode, false);
+
+			
+			
+			var linkData = new datay();
+			linkData.linkType = 'sub';
+			linkData.color = color;
+			linkData.fromNodeID = parent.id;
+			linkData.toNodeID = subNodeData.id;
+			var toRelLink = GRAPH.addLink(parentNode.id, subNodeData.id, linkData);
+			subNode.data.fromLinks.push(toRelLink);
+			
+			var nodespring = layout.getSpring(parentNode.id, subNodeData.id);
+			nodespring.length = 30;
 		}
 		
 		function Neo4j_extractProperties(nodesResult) //extract properties from a collection of nodes, from a cypher node search
@@ -1332,7 +1370,7 @@
 		
 		function addNodesFromResults(nodesResults)
 		{
-			var nodeList = [];
+			var newNodes = [];
 			for (var i = 0; i < nodesResults.results.length; i++){
 				
 				var result = nodesResults.results[i];
@@ -1354,7 +1392,8 @@
 					dat.id =row[I_N_ID];
 					if (row[I_N_LABELS]){dat.labels = row[I_N_LABELS];}
 					if (row[I_N_PROPS]){dat.properties = new neoPropertyList(row[I_N_PROPS]);}
-					addDataNode(row[I_N_ID], dat);
+					var fromNode = addDataNode(row[I_N_ID], dat);
+					if (fromNode){newNodes.push(fromNode);}
 					//if (!GRAPH.getNode(row[I_N_ID])){
 					//	var pos = layout.getNodePosition(row[I_N_ID]);
 					//	layout.setNodePosition(row[I_N_ID], pos.x, pos.y);
@@ -1364,8 +1403,9 @@
 					dat.id =row[I_M_ID];
 					if (row[I_M_LABELS]){dat.labels = row[I_M_LABELS];}
 					if (row[I_M_PROPS]){dat.properties = new neoPropertyList(row[I_M_PROPS]);}
-					addDataNode(row[I_M_ID], dat);
-
+					var toNode = addDataNode(row[I_M_ID], dat);
+					if (toNode){newNodes.push(toNode);}
+					
 					//link R...
 					var linkdata = new datay();
 					linkdata.fromNodeID = row[I_N_ID];
@@ -1373,11 +1413,10 @@
 					linkdata.id = row[I_R_ID];
 					linkdata.name = row[I_R_LABELS];
 					linkdata.properties = new neoPropertyList(row[I_R_PROPS]);
-					addDataLink(row[I_N_ID], row[I_M_ID], linkdata);
-
+					var link = addDataLink(row[I_N_ID], row[I_M_ID], linkdata);
 				}
-			}
-			return nodeList;
+			}	
+			return newNodes;
 		}
 		
 		function addSingleNodesFromResults(nodesResults)
@@ -1395,7 +1434,7 @@
 					dat.id =row[I_N_ID];
 					if (row[I_N_LABELS]){dat.labels = row[I_N_LABELS];}
 					if (row[I_N_PROPS]){dat.properties = new neoPropertyList(row[I_N_PROPS]);}
-					var node = addDataNode(row[I_N_ID], dat);
+					addDataNode(row[I_N_ID], dat);
 					//if (!GRAPH.getNode(row[I_N_ID])){
 
 //					}
@@ -1830,7 +1869,7 @@
 				//if (node.data.UI.fullUI) {node.data.UI.fullUI.attr('stroke','transparent');}
 			//});
 			
-			fadedNodes = [];
+			//fadedNodes = [];
 			
 			//checkedNodes = [];
 			nodeList.forEach(function(node){
@@ -1847,7 +1886,7 @@
 				if (label && node.data.labels.indexOf(label.name) == -1){
 					node.data.UI.fullUI.attr('fill-opacity',0.2)
 					node.data.UI.bodyUI.attr('fill-opacity',0.2);
-					fadedNodes.push(node);
+					//fadedNodes.push(node);
 				}
 			});
 			
@@ -1863,6 +1902,10 @@
 		//convert string to Base64
 		//var encodedData = window.btoa(stringToEncode);
 
+		function calculateDistance(pos1, pos2){
+			return Math.sqrt(Math.pow(pos2.x - pos1.x,2) + Math.pow(pos2.y - pos1.y,2));
+		}
+		
 		function parseDataType(n) {
 			if (n=="true"){return true;}
 			if (n=="false"){return false;}
@@ -1951,28 +1994,36 @@
 				command = 'MATCH (n)-[r]-(m) WHERE ID(n) = ' + nodeId + ' RETURN id(startnode(r)), labels(startnode(r)), startnode(r) , id(r), type(r), r, id(endnode(r)), labels(endnode(r)), endnode(r)';
 				break;
 			}
-			var callback2 = function(nodesResult){addNodesFromResults(nodesResult)};
+			var callback2 = function(nodesResult){
+				var newNodes = addNodesFromResults(nodesResult)
+				//popout effect
+				newNodes.forEach(function (newNode){
+					layout.pinNode(newNode, true);
+					var pos = layout.getNodePosition(nodeId);
+					layout.setNodePosition(newNode.id, pos.x, pos.y-10);
+					layout.pinNode(newNode, false);
+				});
+				
+			};
 			Neo4j_Command([command], callback2);
 			//Neo4j_GetChildNodesFor(nodeId);
 		}
 		
 		/*_direction = "left"(node1:toNode, node2:toNode) /"right"/"both"
 		*/
-		function Neo4j_getRelationCount(nodeId, callback, _direction)
+		function Neo4j_getRelationCounts(nodeId, callback)
 		{
-			command = 'MATCH (n)'+(_direction=='right'?'<':'')+'-[r]-'+(_direction=='left'?'<':'')+'(m) WHERE ID(n) = ' + nodeId + ' RETURN count(*)';
+			command = 'MATCH (n)-[r]->(m) where id(n) = '+nodeId+' RETURN count(n) UNION MATCH (n)<-[r]-(m) where id(n) = '+nodeId+ ' RETURN count(n)'
+
 			var callback2 = function(nodesResults){
 				for (var i = 0; i < nodesResults.results.length; i++){	
-					var result = nodesResults.results[i];
-					for (var d = 0; d < result.data.length; d++){
-						var row = result.data[d].row;
-						callback(row[0]);
-					}
+						var result = nodesResults.results[i];
+						var fromLinksCount = (result.data[0])? result.data[0].row[0]: 0; 
+						var toLinksCount = (result.data[1])? result.data[1].row[0]: 0;
+						callback(fromLinksCount, toLinksCount);
 				}	
 			};
 			Neo4j_Command([command], callback2);	
-			
-			//jed
 		}
 		
 		//Get config file...
@@ -2778,14 +2829,22 @@
 		function highlightSelectedNode(nodeId) {
 		   //var nodeUI;
 		   if (selectedNodeID != ''){
-			   if (currentTheme.showRelationships == "on-highlight" && !interactionOptions.checkNodes){
+				if (nodeId == selectedNodeID) {return;} //...we've re-clicked the same node
+				//DISPOSE PREVIOUS SELECTION
+				//remove all sub nodes...
+				if (config_ext.viewOptions.subnodes.relations=="ifany"){
+					while (selectedNode.data.subNodes.length > 0){
+						removeSubNode(selectedNode.data.subNodes[0], false);
+						selectedNode.data.subNodes.splice(0,1);
+					}
+				};
+				if (currentTheme.showRelationships == "on-highlight" && !interactionOptions.checkNodes){
 					//Remove previous selections visuals
 					var relevantLinks = selectedNode.data.toLinks.concat(selectedNode.data.fromLinks);
 					relevantLinks.forEach(function(link){
 						unHighlightLink(link,false);
 					});
 				}
-			
 				//nodeUI = graphics.getNodeUI(selectedNodeID);
 				//if(selectedNode.data.UI.focusUI){selectedNode.data.UI.focusUI.remove();}
 				//if(selectedNode.data.UI.focusUI){selectedNode.data.UI.focusUI.attr('stroke','transparent');}		   
@@ -2834,20 +2893,35 @@
 				if(link.data.UI.midMarkerUI) {link.data.UI.midMarkerUI.append(link.data.UI.subTextUI);}
 			});*/
 
-		   //selectedNode.data.UI.focusUI = 
-		   selectedNodeID = nodeId;
-		   selectedNodeData = node.data;
-		   selectedNode = node;
-		   //selectedNodeUI = nodeUI;
-		   //selectedNode.data.UI.focusUI = ;
-		   //selectedNode.data.UI.fullUI.append(CommonUI.focusUI);
-		   //selectedNode.data.UI.fullUI.before(CommonUI.focusUI);
-		   selectedNode.data.UI.fullUI.insertBefore(CommonUI.focusUI, selectedNode.data.UI.bodyUI);
-		   selectedNode.data.UI.focusUI = CommonUI.focusUI
+			//selectedNode.data.UI.focusUI = 
+			selectedNodeID = nodeId;
+			selectedNodeData = node.data;
+			selectedNode = node;
+			//selectedNodeUI = nodeUI;
+			//selectedNode.data.UI.focusUI = ;
+			//selectedNode.data.UI.fullUI.append(CommonUI.focusUI);
+			//selectedNode.data.UI.fullUI.before(CommonUI.focusUI);
+			selectedNode.data.UI.fullUI.insertBefore(CommonUI.focusUI, selectedNode.data.UI.bodyUI);
+			selectedNode.data.UI.focusUI = CommonUI.focusUI
 				.attr('r', node.data.nodeSize+ node.data.nodeSize/3)//...for circle
 				.attr('stroke-width',node.data.nodeSize/5);
+
+
+			showNodeDetails(node);	
+
+			//show sub nodes...
+			if (config_ext.viewOptions.subnodes.relations=="ifany"){
+				var diffCount = node.data.totalToLinks - node.data.toLinks.length;
+				if (diffCount > 0) {
+					addSubNode(node, 'subto' + node.id, '#80ffe5', diffCount);
+				}
+				diffCount = node.data.totalFromLinks - node.data.fromLinks.length;
+				if (diffCount > 0) {
+					addSubNode(node, 'subfrom' + node.id, '#99ccff', diffCount);
+				}
+				
+			};
 		   
-		   showNodeDetails(node);	
 		}
 
 		//function fetchInfo(id) {
@@ -3019,7 +3093,9 @@
 						//refreshNodeAppearance(detailsUI.attr('nodeid'));				
 					//}),
 					$(ui).dblclick(function() { // MOUSE CLICK
-						Neo4j_fetchEntitiesForNode();				
+						Neo4j_fetchEntitiesForNode();	
+
+				
 					}),
 					$(ui).hover(function() { // MOUSE HOVER
 						if (viewOptions.highlightRelated){highlightRelatedNodes(node.id, true);}
@@ -3030,9 +3106,7 @@
 						if (viewOptions.highlightdescendants){highlightdescendantNodes(node.id, false);}
 						if (viewOptions){highlightAncestorNodes(node.id, false);}
 					});
-					ui.attr('class','node');
-					ui.attr('nodeSize',node.data.nodeSize);
-					ui.attr('nodeid',node.id);
+
 				}
 				else if (node.data.nodeType == 'window')
 				//====== WINDOW NODES ========================================================================================================
@@ -3103,7 +3177,7 @@
 					}*/
 				}
 				//====== INDICATOR NODES ========================================================================================================
-				else if (node.data.nodeType == 'indicator')
+				else if (node.data.nodeType == 'subnode')
 				{					
 					var nodeConfig = node.data.config.nodeDisplayBody;
 					if(nodeConfig.color){node.data.nodeColor = nodeConfig.color;}
@@ -3115,10 +3189,6 @@
 						.attr('fill',node.data.nodeColor)//node.data.nodeColor)//'#4dffc3')
 						.attr('stroke-width',3)
 						.attr('stroke', node.data.nodeColor)
-						//if (currentTheme.haze) {nodeBody.attr('filter','url(#hazeEffect)');} //haze
-						//if (currentTheme.rounded) {nodeBody.attr('fill','url(#gradRound)');}
-						//if (!currentTheme.opaque) {nodeBody.attr('fill-opacity',node.data.nodeOpacity);}
-					
 					nodeBodyImage = Viva.Graph.svg('image')
 						.attr('x', -node.data.nodeSize)
 						.attr('y', -node.data.nodeSize)
@@ -3138,45 +3208,38 @@
 						.attr('font-family','Arial, Helvetica, sans-serif')
 						.attr('font-size','20')
 						.text(node.data.displayLabel);
-					
-					popoutText = Viva.Graph.svg('text')
-						.attr('class', 'slideText')
-						.attr('y', -node.data.nodeSize) //node.data.nodeSize/2 + 5)
-						.attr('x', 0)// - node.data.displayLabel.length)
-						.attr('fill','#0077b3')
-						.attr('stroke-width','0')
-						.attr('font-family','Arial, Helvetica, sans-serif')
-						.attr('font-size','10')
-						.text('--');
-					popoutText.innerHTML = propertyListToSvgList(node.data.properties, '<tspan x="50" dy="1.2em">', '</tspan>');
-
-					popoutBody = Viva.Graph.svg('rect')
-                        .attr('class', 'slideout')
-                        .attr('x', node.data.nodeSize/2)
-                        .attr('y', -node.data.nodeSize)
-                        .attr('rx', node.data.nodeSize/4)
-                        .attr('height', 0)
-						.attr('fill','#141414')
-                    if (!currentTheme.opaque) {popoutBody.attr('fill-opacity',0.3);}
 
 					node.data.UI.fullUI = ui;
 					node.data.UI.bodyUI = nodeBody;
 					node.data.UI.imageUI = nodeBodyImage;
 					node.data.UI.displayTextUI = displayText;
-					node.data.UI.popoutBodyUI = popoutBody;
-					node.data.UI.popoutTextUI = popoutText;
-					if (currentTheme.loadNodePopouts){ui.append(node.data.UI.popoutBodyUI);}
+
 					ui.append(node.data.UI.bodyUI);
 					if (nodeConfig.image){ui.append(node.data.UI.imageUI);}
 					if (currentTheme.showLabels){ui.append(node.data.UI.displayTextUI);}
-					if (currentTheme.loadNodePopouts){ui.append(node.data.UI.popoutTextUI);}
 					
 				//NODE EVENTS
 					// events (http://www.w3.org/TR/SVG/interact.html#SVGEvents ),
 					// including mouse events:
 					$(ui).mousedown(function() { // MOUSE CLICK
-						highlightSelectedNode(node.id);
+						//highlightSelectedNode(node.id);
+						node.data.UI.fullUI.attr('dragging', 'true');
+						
 					}),
+					
+					$(ui).mouseup(function() { // MOUSE CLICK
+						node.data.UI.fullUI.attr('dragging', 'false');
+						node.data.UI.fullUI.children[0].attr('r', node.data.nodeSize);
+						fixNodeTextWidth(node);
+						//var parentPos = layout.getNodePosition(node.data.superNodes[0].id);
+						//var thisPos = layout.getNodePosition(node.id);
+						//var distance = calculateDistance(parentPos, thisPos);
+						//console.log(distance);
+						//increaseNodeSize(node)
+						
+						//highlightSelectedNode(node.id);
+					}),
+					
 					$(ui).dblclick(function() { // MOUSE CLICK
 						//Neo4j_fetchEntitiesForNode();				
 					}),
@@ -3189,9 +3252,8 @@
 						//if (viewOptions.highlightdescendants){highlightdescendantNodes(node.id, false);}
 						//if (viewOptions){highlightAncestorNodes(node.id, false);}
 					});
-					ui.attr('class','node');
-					ui.attr('nodeSize',node.data.nodeSize);
-					ui.attr('nodeid',node.id);
+					
+					if (node.data.superNodes[0]){ui.attr('parentnodeid', node.data.superNodes[0].id)}
 				}
 				
 				//====== PLANNED NODES ========================================================================================================
@@ -3304,10 +3366,12 @@
 						if (viewOptions.highlightdescendants){highlightdescendantNodes(node.id, false);}
 						if (viewOptions){highlightAncestorNodes(node.id, false);}
 					});
-					ui.attr('class','node');
-					ui.attr('nodeSize',node.data.nodeSize);
-					ui.attr('nodeid',node.id);
 				}
+				
+				ui.attr('class','node');
+				ui.attr('nodeSize',node.data.nodeSize);
+				ui.attr('nodeid',node.id);
+				ui.attr('dragging', false);
 				ui.attr('nodetype',node.data.nodeType);
                 return ui;
             });
@@ -3318,15 +3382,27 @@
 				var nodesize = nodeUI.attr('nodeSize');
 				var nodeid = nodeUI.attr('nodeid');
 				var nodetype = nodeUI.attr('nodetype');
+				var nodeDragging = nodeUI.attr('dragging');
+				//if (nodetype != 'window'){
+				nodeUI.attr('transform','translate(' +(pos.x) + ',' + (pos.y) + ')');
 				
-				if (nodetype != 'window'){
-					nodeUI.attr('transform','translate(' +(pos.x) + ',' + (pos.y) + ')');
-				}
-				else
+				if (nodeDragging == 'true' && nodetype=='subnode')
 				{
-					//nodeUI.attr('transform','translate(' +(pos.x) + ',' + (pos.y) + ')');
-					//nodeUI.attr('transform','translate(' +(pos.x) + ',' + (pos.y) + ')');
+					var parentNodeId = nodeUI.attr('parentnodeid')
+					//console.log(nodeUI);
+					var parentPos = layout.getNodePosition(parentNodeId);
+					var thisPos = layout.getNodePosition(nodeid);
+					var distance = calculateDistance(parentPos, thisPos);
+					
+					nodeUI.children[0].attr('r', distance/5);
+					fixNodeTextWidth(GRAPH.getNode(nodeid));
 				}
+				//}
+				//else
+				//{
+					//nodeUI.attr('transform','translate(' +(pos.x) + ',' + (pos.y) + ')');
+					//nodeUI.attr('transform','translate(' +(pos.x) + ',' + (pos.y) + ')');
+				//}
 				//if (nodeid == selectedNodeID)
 				//{					
 					//detailsUI.attr('transform','translate(' +(pos.x) + ',' + (pos.y) + ')');
@@ -3349,6 +3425,7 @@
                                .attr('id', 'Triangle')
                                .attr('viewBox', "0 0 10 10")
                                .attr('refX', "30")
+                               .attr('refY', "5")
                                .attr('refY', "5")
                                .attr('markerUnits', "userSpaceOnUse")
                                .attr('markerWidth', "10")
@@ -3567,7 +3644,7 @@
 				
 				}
 				//====== INDICATOR LINKS ========================================================================================================
-				else if(link.data.linkType == 'indicator')
+				else if(link.data.linkType == 'sub')
 				{
 					var linklabelId = link.data.id;//'link'+link.fromId + 'To' + link.toId;
 
@@ -3696,7 +3773,7 @@
 				var linkDataIndex = linkUI.attr('linkDataIndex');			
 				if (linkDataIndex){
 					var rad = toNodeRadius/6.5 + 2.4 //...'2' is the height of the triangle
-					linkList[Number(linkDataIndex)].data.UI.toMarkerUI.attr('refX', rad);
+					if(linkList[Number(linkDataIndex)]){linkList[Number(linkDataIndex)].data.UI.toMarkerUI.attr('refX', rad);}
 				}
 				
 				if (linkUI.attr('linkType') == 'planned'){linkPath.attr("stroke-dasharray", "5,5");}
