@@ -3,7 +3,9 @@
 <head>
     <title>Graph Engine</title>
     <script type="text/javascript" src="deps/vivagraph.js"></script>
+	<script type="text/javascript" src="custom/configloader.json"></script>
 	<script type="text/javascript" src="custom/Data1.json"></script>
+	
     <!--
     This example uses jQuery, but it's only for convenience of listenting
     to DOM events. The jQuery can be replaced with your favorite library.
@@ -30,7 +32,7 @@
 		//var highlightedLinks = [];
 		var linkList = []; //list of "link" objects
 		var timeoutElements = []; //list of "timeoutElement" objects
-		
+		var connections = [];
 		var selectedNodeID = '';
 		var selectedNodeData = '';
 		var selectedNode = '';
@@ -40,92 +42,46 @@
 		var counter = 10;	
 		var detailsUI;
 		var detailsNode;
+		var processUniqueId = 0; //...must be incremented every time its used
 		
 		//......Connection settings........
-		var defaultNeo4jUsername = 'neo4j';
-		var defaultNeo4jPassword = 'password1234$';
-		var neo4jUserToken = '';
-		var neo4jServerURL = 'http://localhost:7474';
-		
+		//var connections = []; //array of neo4jConnectionType
+		//var defaultNeo4jUsername = 'neo4j';
+		//var defaultNeo4jPassword = 'password1234$';
+		//var neo4jUserToken = '';
+		//var neo4jServerURL = 'http://localhost:7474';
+
 		//......Filter settings.............
 		var viewOptions = new viewOptionsType();
 		var interactionOptions = new interactionOptionsType();
-		
+
 		//......Display settings............
-		var THEMES = [];
 		var currentTheme = new theme();
-		var startupLabels = ["SCHEMA_ROOT", "ROOT"]; //list of strings // 
 		var MaxLabelLength = 5; //the amount of characters allowed before elipse
 		var labelSize = 30;
 		var CommonUI = {};
-		
-
-		//Theme 0
-		var themeX = new theme();
-		themeX.entityRgbRange={min:100,max:200}; 
-		themeX.graphBackground='#cccccc'; 
-		themeX.entityLabelColor='#0d0d0d';
-		themeX.shadow = true;
-		themeX.glow = false;
-		THEMES.push(themeX);
-		themeX.linkColor = 'gray';
-		
-		//Theme 1
-		themeX = new theme();
-		themeX.entityRgbRange={min:70,max:150}; 
-		themeX.graphBackground='#cccccc'; 
-		themeX.entityLabelColor='#0d0d0d';
-		themeX.shadow = true;
-		themeX.glow = false;
-		THEMES.push(themeX);
-		themeX.linkColor = 'gray';
-		
-		//Theme 2 (Black hole)
-		themeX = new theme();
-		themeX.entityRgbRange={min:0,max:10}; 
-		themeX.graphBackground='#0d0d0d'; 
-		themeX.entityLabelColor='#cccccc';
-		THEMES.push(themeX);
-		themeX.shadow = false;
-		themeX.rounded = false;
-		themeX.glow = true;
-		themeX.linkColor = '#3333ff';
-		themeX.entityLabelColor = '#ccffff';
-		
-		//Theme 3 (eco 1)
-		themeX = new theme();
-		themeX.entityRgbRange={min:50,max:100}; 
-		themeX.graphBackground='#262626'; 
-		themeX.entityLabelColor='#262626';
-		THEMES.push(themeX);
-		themeX.shadow = false;
-		themeX.glow = false;
-		themeX.rounded = false;
-		themeX.linkColor = '#999999';
-		themeX.entityLabelColor = '#e6e6e6';
-		themeX.opaque = true;
-		themeX.labelSizing = 'none';
-		
-		currentTheme = THEMES[2];
-		
-		
-		
-		
-		//Singletons...
+	
+		//SINGLETONS...
 		var GRAPH = '';
 		var graphics = '';
 		var layout = '';
 		var renderer = '';
 		var graphContainer;
+
 		
-//VISUAL SETTINGS		
-		var hiddenLabels = [];
+//STARTUP SEQUENCE
+		var config_ext;
 		
-		
+		Configuration(setConfigSettings); //get config, setup common UI
+		//Configuration(connectUser);
+		checkTimeoutElements() //start monitoring timeout elements
+	
 //MODELS	
 		//Node model
 		function datax() {
 		  this.nodeType = 'data';
+		  this.source; //a label describing which database the node comes from/
+		  //this.dbdestination = ''; //a label describing which database the node performs opertions on/
 		  this.id = 0;
 		  this.labels = []; //string array of labels
 		  this.nodeSize = 25;
@@ -155,6 +111,12 @@
 		  return this;
 		}
 		
+		function property(key, value)
+		{
+			this.key = key;
+			this.value = value;
+			return this;
+		}
 		function nodeUiElements()
 		{
 			this.fullUI;
@@ -185,14 +147,15 @@
 		}
 		
 		//Link model
-		function datay(){
+		function datay(fromNodeId, toNodeId, linkId, name){
 			this.linkType = 'data';
-			this.fromNodeID = -1;
-			this.toNodeID = -1;
-			this.id = -1;
+			this.source; //...neo4jConnectionType
+			this.fromNodeID = fromNodeId;
+			this.toNodeID = toNodeId ? toNodeId :-1;
+			this.id = linkId ? linkId : -1;
 			this.color = currentTheme.linkColor;
 			this.thickness = 1;
-			this.name = '';
+			this.name =  name ? name : '';
 			this.displayLabel = '';
 			this.properties = [];
 			this.UI = {};
@@ -209,6 +172,15 @@
 			this.duration = _duration; //in seconds
 			this.activationPoint = +new Date(); //+new Date()
 			this.element = _element; //UI element
+		}
+		
+		function neo4jConnectionType(name, url, username, password)
+		{
+			this.name = name;
+			this.username = username;
+			this.password = password;
+			this.server = url;
+			this.userToken =  window.btoa(username + ':' + password);
 		}
 		
 		function neoLabel(setName, setColor, setColorRGB)
@@ -269,21 +241,12 @@
 			this.showLabels = true;
 		}
 		
-//STARTUP SEQUENCE
-	var config_ext;
-	Configuration(setConfigSettings); //get config, setup common UI
-	Configuration(connectUser);
-	checkTimeoutElements() //start monitoring timeout elements
-	
+
 //FUNCTIONS...
 		
 		function setConfigSettings(config)
 		{
-			if (config.displaySettings.usePrebuiltTheme)
-			{
-				currentTheme = THEMES[config.displaySettings.prebuiltThemeIndex];
-				return;
-			}
+
 			currentTheme.backgroundImage=config.displaySettings.backgroundImage;
 			currentTheme.loadNodePopouts =config.displaySettings.loadNodePopouts;
 			currentTheme.loadRelationPopouts = config.displaySettings.loadRelationPopouts;
@@ -307,9 +270,15 @@
 			currentTheme.highlightHaze = config.displaySettings.highlightHaze;
 			currentTheme.linkMainTextColor = config.displaySettings.linkMainTextColor;
 			currentTheme.linkSubTextColor = config.displaySettings.linkSubTextColor;
-			startupLabels = [];
-			config.startupOptions.startupSearch.forEach(function(search, index){
-				startupLabels.push(search.label);
+
+			//setup connections...
+			config.neo4jconnections.forEach(function (conn){
+				var connection = new neo4jConnectionType(conn.sourceName, conn.server, conn.username, conn.password);
+				connections.push(connection);
+				//set default connection...
+				if (connection.name == config.startupOptions.defaultConnection){
+					currentTheme.currentConnection = connection
+				}
 			});
 
 			//setting up panels...
@@ -320,11 +289,55 @@
 				//elPanel.attr('visibility', (panel)?'visible':'hidden');
 				//{"panels":[{"name":"panelSelectionOptions", "parent":"leftColumn", "visibility":true}]}
 			});
-			
+
 			//Set global variable
 			config_ext = config;
-			
 			setupCommonUI();
+
+			//GET ALL LABELS>>
+			Neo4jGetAllLabels(); //..get all entity names from the DB
+			
+			//GET STARTUP NODES>>
+			config.startupOptions.startupSearch.forEach(function(search, index){
+				Neo4jGetNodesByDetails(search.label, search.properties)
+			});
+			//RUN STARTUP QUERIES>>
+			config.startupOptions.startupQueries.forEach(function(search, index){
+				Neo4jQuerySimpleSearch(search.fromEntity, search.whereProperty, search.equalsValue);
+			});
+			
+		}
+		
+		//Get config file...
+		function Configuration(callback)
+		{
+		
+			var masterConfigs = [];
+			
+			//var i = 0;
+			//var loadNext = function (){			
+			//	if (i == configDetails.configs.length){//...all configs have been loaded
+			//		callback(configs[0]);	
+			//		return;
+			//	}
+			//	$.getScript(configDetails.configs[i++].url).success(function(json){
+			//	//$.getJSON(jsonObject.Configurations[i++].url, function(json) {
+			//		configDetails.configs[i++] = json;
+			//		//configs.push(json.Configurations);
+			//		console.log(configs);
+			//		loadNext();
+			//	});
+			//}
+			
+			$(document).ready(function(e) {
+				//loadNext();
+			
+			
+				console.log(configDetails.configs);
+				
+				
+				callback(jsonObject.Configuration);	
+			});
 		}
 		
 		function setupCommonUI(){
@@ -474,7 +487,6 @@
 				monitorNode(node);
 			});	
 			//add links...
-			//console.log(checkedLinks);
 			checkedLinks.forEach(function (link){
 				monitorLink(link);
 			});
@@ -495,9 +507,9 @@
 		/*The following 3 functions form a closed loop*/
 		function pollDatabase()
 		{
-			setTimeout(function(){ Neo4j_checkMonitoredNodes();}, config_ext.monitoringOptions.pollInterval * 1000);
+			setTimeout(function(){ Neo4jCheckMonitoredNodes();}, config_ext.monitoringOptions.pollInterval * 1000);
 		}
-		function Neo4j_checkMonitoredNodes()
+		function Neo4jCheckMonitoredNodes()
 		{
 			if (monitoredNodes.length == 0){return;}
 			var id = 0;
@@ -505,7 +517,7 @@
 				addSingleNodesFromResults(nodesResult);
 				if(id >= monitoredNodes.length){
 					performAnimations();
-					setTimeout(function(){ Neo4j_checkMonitoredLinks(); }, config_ext.monitoringOptions.pollInterval * 1000);
+					setTimeout(function(){ Neo4jCheckMonitoredLinks(); }, config_ext.monitoringOptions.pollInterval * 1000);
 					return;
 				}
 				var command = 'MATCH (n) WHERE ID(n) = '+ monitoredNodes[id++].id + ' RETURN id(n), labels(n), n';
@@ -514,7 +526,7 @@
 			var command = 'MATCH (n) WHERE ID(n) = '+ monitoredNodes[id++].id + ' RETURN id(n), labels(n), n';
 			Neo4j_Command([command], callback);
 		}
-		function Neo4j_checkMonitoredLinks()
+		function Neo4jCheckMonitoredLinks()
 		{
 			if (monitoredLinks.length == 0){return;}
 			var id = 0;
@@ -598,7 +610,7 @@
 		
 		function testFunction(){
 			var x = function callback(){};
-			Neo4j_getRelationCounts(selectedNodeID, x);
+			Neo4jGetRelationCounts(selectedNodeID, x);
 		}
 		
 		function animateTest(node)
@@ -728,21 +740,20 @@
 				rootMostNodes.forEach(function (node) {
 					if (node.data.labels[0] == label){
 						if (useArray) 
-							rootObject[label].push(createJsonNode(node, {}, processedNodes));
+							rootObject[label].push(createJsonFromNode(node, {}, processedNodes));
 						else
-							rootObject[label] = createJsonNode(node, {}, processedNodes);
+							rootObject[label] = createJsonFromNode(node, {}, processedNodes);
 					}
 				})
 			});			
 			var jsonstring = JSON.stringify(rootObject);
-			console.log(jsonstring);
 			var dialog = document.getElementById('myDialog');
 			var dialogText = document.getElementById('myDialogText');
 			dialogText.innerHTML = jsonstring
 			dialog.showModal();
 		}
 
-		function createJsonNode(node, parentObject, processedNodes, parentNode)
+		function createJsonFromNode(node, parentObject, processedNodes, parentNode)
 		{
 		
 			var entityName = node.data.labels[0]; 
@@ -792,15 +803,207 @@
 							if (checkedNodes.map(function(n){return n.id}).indexOf(childNode.id) > -1)
 							{
 								if (useArray) 
-									thisObject[label].push(createJsonNode(childNode, {}, processedNodes, node));
+									thisObject[label].push(createJsonFromNode(childNode, {}, processedNodes, node));
 								else 
-									thisObject[label] = createJsonNode(childNode, {}, processedNodes, node);
+									thisObject[label] = createJsonFromNode(childNode, {}, processedNodes, node);
 							}
 						}
 					}
 				})
 			})
 			return thisObject;
+		}
+		
+		function getType(p) {
+			if (Array.isArray(p)) return 'array';
+			else if (typeof p == 'string') return 'string';
+			else if (p != null && typeof p == 'object') return 'object';
+			else return 'other';
+		}
+
+		function jsonStringToObject(jsonString)
+		{
+			return JSON.parse(jsonString);
+		}
+		
+		function submitJsonForGraph()
+		{
+			var jsonString = document.getElementById('dlg.text.json').value;
+			jsonToGraph(jsonString);
+			closeDialog('json2GraphDlg');
+		}
+		
+		function jsonToGraph(jsonString){
+			
+			var graphData = processJsonToGraph('root', jsonStringToObject(jsonString), null, 0);
+			//ADD NODES...
+			graphData.nodes.map(function(nData){
+				//match node to existing nodes
+
+				console.log(nData.labels[0] + ' : ' + nData.temp.matchedNodes.length)
+				if (nData.temp.matchedNodes > 0){//...update existing node
+					//there is no parent, but there are existing matching nodes, therefore make all the matching nodes our root nodes. (we will update all their paths)
+					nData.temp.matchedNodes.forEach(function (existingNode){
+						
+						//update existing node
+						console.log('****************');
+						console.log(updatedData);
+						//var updatedData = existingNode.data;
+						existingNode.data.properties = mergeProperties(existingNode.data.properties, existingNode.data.temp.properties)
+						console.log(updatedData);
+						console.log('****************');
+						addDataNode(existingNode.id, existingNode.data);
+					});
+				}
+				else{ //create new node...
+					nData.properties = nData.temp.properties;
+					addDataNode(nData.id, nData)
+				}
+			});
+			
+			//ADD LINKS...
+			graphData.links.map(function(lData){
+
+				addDataLink(lData.fromNodeID, lData.toNodeID, lData)
+			});
+		}
+		
+		function processJsonToGraph(name, obj, parentNodeData, level)
+		{
+			//jed
+			var stillRoot = parentNodeData ? false : true;
+			if (!stillRoot){if (!parentNodeData.temp.parentNodeData) {stillRoot = true;}}
+			var fromNodeId = parentNodeData ? parentNodeData.id : 'root';
+			level++;
+			var type = getType(obj);
+			var graphData = {nodes:[], links:[]};
+			var relationsAdded = false;
+			//create a node (will only be applied if this is actually an object (not a primitive or array))
+			var nodeData = new datax();
+			nodeData.labels = [name];
+			nodeData.id = 'newnode_'+ (++processUniqueId);
+			nodeData.temp = {};
+			nodeData.temp.stillRoot = stillRoot;
+			nodeData.temp.matchedNodes = []; //if '$matchon' is specified then this list will be existing matching nodes
+			nodeData.temp.parentNodeData = parentNodeData;
+			nodeData.temp.properties = [];
+			
+			nodesListData = [];
+			
+			//Process object...
+			if (type == 'object'){
+				//Find existing nodes by matching label
+				
+				var nodeDataProperties = [];
+				//Filter matching nodes by key properties...
+				for (var propName in obj){	
+					if (propName == '$matchon'){//...meta data (matchon)...
+						//...$matchon should be an array of strings, who's values specify which fields in the current entity, to match on.
+						var matchPropertyList = []
+						var onPath = false;
+						obj['$matchon'].forEach(function (matchPropName){
+							if (matchPropName == '$onpath'){
+								onPath = true;
+							}else{
+								matchPropertyList.push(new property(matchPropName, obj[matchPropName]));
+							}
+						});
+						
+						var eligibleNodesList = nodeList; //...Search all nodes by default
+						if (onPath==true){
+							//Only search nodes on the existing path (child nodes of the parent node)...
+							eligibleNodesList = getNodesByMatchingLabels((stillRoot)? nodeList : parentNodeData.toNodes , nodeData.labels);
+						}
+						
+						nodeData.temp.matchedNodes = getNodesByMatchingProperties(eligibleNodesList, matchPropertyList);				
+						nodeData.temp.matchedNodes.map(function(mn){
+							mn.data.temp = {}
+							mn.data.temp.matchedNodes = [mn];
+							mn.data.temp.properties = [];
+							mn.data.temp.parentNodeData = parentNodeData;
+							nodesListData.push(mn.data);
+						});
+					}
+					
+					else if (propName == '$rel'){//...meta data (relationship)...
+						obj[propName].forEach(function (relation){ //...iterate throguh relationships
+							var newLinkData = new datay(fromNodeId, newNode.id, ++processUniqueId, relation['$name']);
+							newLinkData.properties = [];
+							//iterate through relationship properties...
+							for (var relPropName in relation){//.forEach(function(prop){
+								newLinkData.properties.push(new property(relPropName, relation[relPropName]));
+							}
+							graphData.links.push(newLinkData); //...add specified link
+							relationsAdded = true;
+						})
+					}
+					
+					else { //...Since this property is not a meta property, add it to the data proerties list...
+						nodeDataProperties.push(propName);
+					}
+				}
+				
+				if (nodesListData.length == 0){ //...no existing nodes exist matching this node
+					//Create a new node...
+					nodesListData = [nodeData]; //...add new node
+					//nodeData.temp.matchedNodes = [nodeData]
+				}
+				
+				//get all the properties for the object
+				nodesListData.forEach(function (newNode){ 
+					
+					//for (var propName in obj){
+					nodeDataProperties.forEach(function(nodePropName){
+						//process non-meta property
+						//else { //...property is not meta data... (could be anything)
+						var subGraphData = processJsonToGraph(nodePropName, obj[nodePropName], newNode, level)
+						if (subGraphData){
+							subGraphData.nodes.map(function (n){graphData.nodes.push(n);});
+							subGraphData.links.map(function (l){graphData.links.push(l);});
+						}
+					});
+
+					//ADD THIS NODE...
+					if (parentNodeData) { //node has a parent, which means its not a root object (because a valid object will at least have the root node as a parent)
+						graphData.nodes.push(newNode);
+					}
+					
+					//ADD A RELATIONSHIP (if not already added, and not a root connection)...
+					if (!relationsAdded){ //...no relationships were explicitly mentioned
+
+						if (parentNodeData && parentNodeData.temp.parentNodeData) //...there is actually a parent, and a grandparent, to create a link to
+						{
+
+							//link this node to the parent node (will only be applied if this is actually an object (not a primitive or array))
+							var defaultLink = new datay(fromNodeId, newNode.id, 'newlink_'+ (++processUniqueId), 'DEFAULT')						
+							graphData.links.push(defaultLink);
+						}
+					}
+				})//...next new/existing node
+				
+				return graphData;
+			}
+			//Process array...
+			else if (type == 'array'){
+				//iterate through elements...
+				obj.forEach(function(element){
+					var subGraphData;
+					subGraphData = processJsonToGraph(nodeData.labels[0],element, parentNodeData, level)
+					if (subGraphData){
+						subGraphData.nodes.map(function (n){graphData.nodes.push(n);});
+						subGraphData.links.map(function (l){graphData.links.push(l);});
+					}
+				})
+				return graphData;
+			}
+			//Process primitive...
+			else{ //...property is a primitive
+				if(parentNodeData){
+					var subGraphData = parentNodeData.temp.properties.push(new property(name, obj));
+					return graphData; //return nothing since its only a property
+				}
+			}
+
 		}
 		
 		function closeDialog(dialogName)
@@ -812,7 +1015,7 @@
 		{
 			var propArray = [];
 			for (var thiskey in obj) {
-				propArray.push({key: thiskey, value:obj[thiskey]})
+				propArray.push(new property(thiskey, obj[thiskey]));
 			}
 			return propArray;
 		}
@@ -873,6 +1076,70 @@
 			return x;
 		}
 		
+		function mergeProperties(basePropertyList, newPropertyList){
+			var updatedList = [];
+			var addedList = [];
+			
+			newPropertyList.forEach(function (newprop){
+				var newPropExists = false;
+				basePropertyList.forEach(function (baseprop){
+					if (baseprop.key == newprop.key){
+						newPropExists = true;
+						if (baseprop.value != newprop.value){
+							baseprop.value = newprop.value;
+							updatedList.push(baseprop);
+						}
+					}
+				});
+				if (!newPropExists){
+					basePropertyList.push(newprop)
+					addedList.push(newprop);
+					baseprop.push(newprop)
+				}
+			})
+			return basePropertyList;
+		}
+		
+		function getNodesByMatchingLabels(nodesList, labels){
+			var returnNodeList = [];		
+			//iterate through 
+			nodesList.forEach(function(node){
+				var nodeEligible = true;
+				labels.forEach(function (label){
+					var labelFound = false;
+					node.data.labels.forEach(function(nodelabel){
+						if (nodelabel == label)
+							labelFound = true;
+					});
+					if (!labelFound){nodeEligible = false}
+				});
+				if (nodeEligible){returnNodeList.push(node);}
+			});
+			return returnNodeList;
+		}
+		
+		function getNodesByMatchingProperties(nodesList, properties){
+			console.log(nodesList)
+			console.log(properties)
+			var returnNodeList = [];		
+			//iterate through 
+			nodesList.forEach(function(node){
+				var nodeEligible = true;
+				properties.forEach(function (prop){
+					var propFound = false;
+					node.data.properties.forEach(function(nodeprop){
+						console.log('prop.key=' + prop.key + ' nodeprop.key=' + nodeprop.key + ' prop.value' + prop.value + ' nodeprop.value=' + nodeprop.value)
+						if (prop.key == nodeprop.key && prop.value == nodeprop.value){
+							propFound = true;	
+						}
+					});
+					if (!propFound){nodeEligible = false;}
+				});
+				if(nodeEligible){returnNodeList.push(node);}
+			});
+			return returnNodeList;
+		}
+		
 		function getNodePropertyValue(propertyList, propertyName)
 		{
 			var x;
@@ -886,6 +1153,7 @@
 			}); 
 			return x;
 		}
+		
 		function getDataNode(nodeID)
 		{
 			for (var i = 0; i < nodeList.length; i++){
@@ -942,7 +1210,7 @@
 				if (fetchbutton) {fetchbutton.innerHTML = existingLabelSelector.instanceCount;}
 				return;
 			}
-			
+
 			var rgb = {r: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max)),
 								   g: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max)),
 								   b: Math.ceil(getRandomArbitrary(currentTheme.entityRgbRange.min, currentTheme.entityRgbRange.max))
@@ -960,7 +1228,7 @@
 						var LabelsDiv = document.getElementById('selectorLabels');
 						
 						var color = 'gray';
-						var button_onclick = "Neo4j_GetNodesByLabel()";
+						var button_onclick = "Neo4jGetNodesByLabel()";
 						var fetchButton = '<button id="labelSelector.fetcher.All" class="forlabelselector tooltip" onclick="'+button_onclick+'"> <div class="tooltiptext">Fetch from database</div></button>'
 						
 						
@@ -969,7 +1237,7 @@
 						
 							labelsList.forEach(function(label,index){
 							LabelsDiv.innerHTML += '<tr>';
-							button_onclick = "Neo4j_GetNodesByLabel('"+label.name+"')";
+							button_onclick = "Neo4jGetNodesByLabel('"+label.name+"')";
 							fetchButton = '<button id="labelSelector.fetcher.'+label.name+'" class="forlabelselector tooltip" style="background-color:'+label.color+'" onclick="'+button_onclick+'">'+label.instanceCount+'<div class="tooltiptext">Fetch from database</div></button>'
 							LabelsDiv.innerHTML+= '<td><div onclick="highlightLabel('+index+')" id="labelSelectorPanel" style="background-color:'+color+';">' + label.name +'</div></td><td>'+fetchButton+'</td>';
 							qbuilderFromEntitySelector.innerHTML += '<option value="'+label.name+'">' +label.name+ '</option>';
@@ -1023,7 +1291,7 @@
 				nodeUI = graphics.getNodeUI(nodeId);
 			}
 			
-			//get config data for node...
+			//find config for node if any is specified...
 			config_ext.startupOptions.nodeDisplayBody.map(function (nconfig) {if (nconfig.label == nodeData.labels[0]) {nodeData.config.nodeDisplayBody = nconfig;}});
 			config_ext.startupOptions.nodeDisplayValues.map(function (nconfig) {if (nconfig.label == nodeData.labels[0]) {nodeData.config.nodeDisplayValues = nconfig;}});
 			//set display label...
@@ -1061,7 +1329,7 @@
 						dataNode.data.totalToLinks = toCount;
 						dataNode.data.totalFromLinks = fromCount;
 					}
-					Neo4j_getRelationCounts(dataNode.id, updateIndicatorNode);
+					Neo4jGetRelationCounts(dataNode.id, updateIndicatorNode);
 				};
 				return dataNode; //RETURN ONLY IF NODE IS NEW
 			}
@@ -1106,7 +1374,6 @@
 			//popout effect
 			layout.pinNode(subNode, true);
 			var pos = layout.getNodePosition(parentNode.id);
-			//console.log(pos);
 			binaryToggle = !binaryToggle;
 			//layout.setNodePosition(subNode.id, pos.x + 10 * (binaryToggle)?-1:1, pos.y + 10* (binaryToggle)?-1:1);
 			layout.setNodePosition(subNode.id, pos.x + 10 * ((binaryToggle)?-1:1), pos.y + 10* ((binaryToggle)?-1:1));
@@ -1126,7 +1393,7 @@
 			nodespring.length = 30;
 		}
 		
-		function Neo4j_extractProperties(nodesResult) //extract properties from a collection of nodes, from a cypher node search
+		function Neo4jExtractProperties(nodesResult) //extract properties from a collection of nodes, from a cypher node search
 		{
 			var propertyList = [];
 			for (var i = 0; i < nodesResult.results.length; i++){		
@@ -1139,7 +1406,7 @@
 			
 			return propertyList;
 		}
-		function Neo4j_extractValues(nodesResult) //extract properties from a collection of nodes, from a cypher node search
+		function Neo4jExtractValues(nodesResult) //extract properties from a collection of nodes, from a cypher node search
 		{
 			var valueList = [];
 			for (var i = 0; i < nodesResult.results.length; i++){		
@@ -1152,7 +1419,7 @@
 			return valueList;
 		}
 		
-		function Neo4j_qbuilder(selectType)
+		function Neo4jQbuilder(selectType)
 		{
 			var scope = selectType.split('.');
 			if (scope[2] == 'entity'){
@@ -1168,7 +1435,7 @@
 				var command = "MATCH (n:"+selectedTypeValue+") return n";
 				var listedProperties = [];
 				var callback = function(nodesResult){
-					var propertyList = Neo4j_extractProperties(nodesResult)
+					var propertyList = Neo4jExtractProperties(nodesResult)
 					propertyList.sort(sort_by('key', false, function(a){return a.toUpperCase()})).forEach(function(prop){
 						if (listedProperties.indexOf(prop.key) == -1) {
 							listedProperties.push(prop.key);
@@ -1188,7 +1455,7 @@
 				if (!selectedProperty){ return;}
 				var command = "MATCH (n:"+selectedEntity+") return distinct n." + selectedProperty;
 				var callback = function(nodesResult){
-					var valueList = Neo4j_extractValues(nodesResult)
+					var valueList = Neo4jExtractValues(nodesResult)
 					var valueElement = document.getElementById(childElementName);
 					valueElement.innerHTML = '<option value=""></option>';	
 					valueList.sort().forEach(function(prop){
@@ -1202,13 +1469,17 @@
 			}
 		}
 		
-		function Neo4j_querySimpleSearch()
+		function ButtonSimpleSearch()
 		{
 			var fromEntity = document.getElementById('qbuilder.from.entity').value;
 			var fromProperty = document.getElementById('qbuilder.from.property').value;
 			var fromValue = document.getElementById('qbuilder.from.value').value;
-			//document.getElementById('qbuilder.from.value').value = '';
-			var propertyBlock = (fromProperty)?'{'+fromProperty+':'+parseDataType(fromValue)+'}':'';
+			Neo4jQuerySimpleSearch(fromEntity, fromProperty, fromValue);
+		}
+		
+		function Neo4jQuerySimpleSearch(fromEntity, whereProperty, equalsValue)
+		{
+			var propertyBlock = (whereProperty)?'{'+whereProperty+':'+parseDataType(equalsValue)+'}':'';
 			
 			var command = 'MATCH (n:'+fromEntity + propertyBlock + ') RETURN id(n), labels(n), n';
 			var callback = function(nodesResult){
@@ -1222,7 +1493,7 @@
 			Neo4j_Command([command], callback);
 		}
 		
-		function Neo4j_queryRecursiveSearch()
+		function Neo4jQueryRecursiveSearch()
 		{
 			var fromEntity = document.getElementById('qbuilder.from.entity').value;
 			var fromProperty = document.getElementById('qbuilder.from.property').value;
@@ -1242,7 +1513,7 @@
 					}
 					else
 					{
-						console.log('old');
+						//old
 					}
 				});
 			};
@@ -1268,7 +1539,7 @@
 
 		}		
 		
-		function Neo4j_CreateEntity()
+		function Neo4jCreateEntity()
 		{
 			var entityName = document.getElementById('new.entity.name').value;
 			if (!entityName || entityName == ''){alert('Save failed!\nNo entity name specified.'); return;}
@@ -1293,7 +1564,7 @@
 		}
 		
 		
-		function Neo4j_UpdateEntity(nodeID)
+		function Neo4jUpdateEntity(nodeID)
 		{
 			if (!nodeID){nodeID = selectedNodeID;}
 			var entityName = document.getElementById('new.entity.name').value;
@@ -1318,7 +1589,7 @@
 			Neo4j_Command([command], callback);
 		}
 		
-		function Neo4j_CreateRelation(nodeID1, nodeID2, planOnly)
+		function Neo4jCreateRelation(nodeID1, nodeID2, planOnly)
 		{
 			var relationName = document.getElementById('new.relation.name').value;
 			if (!relationName || relationName == ''){alert('Save failed!\nNo relation name specified.'); return;}
@@ -1339,7 +1610,7 @@
 
 			if (!planOnly)
 			{
-				var callback = function(nodesResult){Neo4j_fetchRelation(nodeID1, nodeID2);}
+				var callback = function(nodesResult){Neo4jFetchRelation(nodeID1, nodeID2);}
 				var command = 'MATCH (n) WHERE ID(n) = ' + nodeID1 + ' MATCH (m) WHERE ID(m) = '+ nodeID2 + ' CREATE (n)-[r:'+ relationName + propList +']->(m) RETURN id(startnode(r)), labels(startnode(r)), startnode(r) , id(r), type(r), r, id(endnode(r)), labels(endnode(r)), endnode(r)'
 				Neo4j_Command([command], callback);
 			}
@@ -1945,21 +2216,23 @@
 //AJAX CALLS
 		
 		
-		function Neo4j_Command(statements, successCallback, failCallback)
+		function Neo4j_Command(statements, successCallback, failCallback, _connection)
 		{
+			if (!_connection){_connection = currentTheme.currentConnection;}
 			var body = new neo_APIcall(); 
 			statements.forEach(function(statement){
 				body.statements.push(new neo_Statement(statement));
+				console.log(statement);
 			});
 			
 			$.ajax({
-					url: neo4jServerURL + "/db/data/transaction/commit",
+					url: _connection.server + "/db/data/transaction/commit",
 					type: 'post',
 					data: JSON.stringify(body),
 					headers: {
 						"Accept":'application/json; charset=UTF-8',
 						"Content-Type": 'application/json',
-						"Authorization": 'Basic ' + neo4jUserToken
+						"Authorization": 'Basic ' + _connection.userToken
 					},
 					dataType: 'json',				
 					
@@ -1979,7 +2252,7 @@
 		
 
 		
-		function Neo4j_fetchEntitiesForNode(nodeId)
+		function Neo4jFetchEntitiesForNode(nodeId)
 		{
 			if (!nodeId) {nodeId = selectedNodeID;}
 			var command = '';
@@ -2006,12 +2279,11 @@
 				
 			};
 			Neo4j_Command([command], callback2);
-			//Neo4j_GetChildNodesFor(nodeId);
 		}
 		
 		/*_direction = "left"(node1:toNode, node2:toNode) /"right"/"both"
 		*/
-		function Neo4j_getRelationCounts(nodeId, callback)
+		function Neo4jGetRelationCounts(nodeId, callback)
 		{
 			command = 'MATCH (n)-[r]->(m) where id(n) = '+nodeId+' RETURN count(n) UNION MATCH (n)<-[r]-(m) where id(n) = '+nodeId+ ' RETURN count(n)'
 
@@ -2025,64 +2297,29 @@
 			};
 			Neo4j_Command([command], callback2);	
 		}
-		
-		//Get config file...
-		function Configuration(callback)
+
+		function Neo4jGetNodeById(nodeid)
 		{
-			var body;
-			$(document).ready(function(e) {
-				callback(jsonObject.Configuration);
-			});
+			var callback = function (nodesResult) {
+				addSingleNodesFromResults(nodesResult);
+				//for (var i = 0; i < returnbody.results.length; i++){
+				//	var result = returnbody.results[i];
+				//	for (var d = 0; d < result.data.length; d++){
+				//		var row = result.data[d].row;
+				//		var dat = new datax;
+				//		dat.id =row[0];
+				//		if (row[1]){dat.labels = row[1];}
+				//		if (row[2]){dat.properties = new neoPropertyList(row[2]);}
+				//		addDataNode(row[0], dat);
+				//	}
+				//}
+			}
+			
+			var command = 'MATCH (n) WHERE ID(n) = '+nodeid+'  RETURN id(n), labels(n), (n)';
+			Neo4j_Command([command], callback);
 		}
 		
 		/*
-		function Neo4j_GetChildNodesFor(neo_nodeid)
-		{
-			var statements = [];
-			statements.push("MATCH (n)-[r]->(m) where id(n) = "+ neo_nodeid +" RETURN id(n), id(m), labels(m), (m), id(r), type(r), r");
-			var body = new neo_APIcall(); 
-			statements.forEach(function(statement){
-				body.statements.push(new neo_Statement(statement));
-			});
-			
-			
-			$.ajax({
-					url: neo4jServerURL + "/db/data/transaction/commit",
-					type: 'post',
-					data: JSON.stringify(body),//{//access_token: 'XXXXXXXXXXXXXXXXXXX'},
-					headers: {
-						"Accept":'application/json; charset=UTF-8',
-						"Content-Type": 'application/json',
-						"Authorization": 'Basic ' + neo4jUserToken
-					},
-					dataType: 'json',
-					success: function (returnbody) {
-						for (var i = 0; i < returnbody.results.length; i++){
-							
-							var result = returnbody.results[i];
-							for (var d = 0; d < result.data.length; d++){
-								var row = result.data[d].row;
-								var dat = new datax;
-								dat.id =row[1];
-								if (row[2]){dat.labels = row[2];}
-								if (row[3]){dat.properties = new neoPropertyList(row[3]);}
-								var node = addDataNode(row[1], dat);
-								
-								//Link...
-								var linkdata = new datay();
-								linkdata.id = row[4];
-								linkdata.name = row[5];
-								linkdata.properties = new neoPropertyList(row[6]);
-								addDataLink(row[0], row[1], linkdata);
-								//}
-								//fixNodeTextWidth();
-							}
-						}
-						//createLabelDiplay();
-					}
-				});
-		}
-		*/
 		function Neo4j_GetNodeById(neo_nodeid)
 		{
 			var body = new neo_APIcall(); 
@@ -2113,7 +2350,43 @@
 					}
 				});
 		}
+		*/
 		
+		function Neo4jGetNodesByLabel(byLabel)
+		{
+			var callback = function (nodesResult) {
+				addSingleNodesFromResults(nodesResult);
+			}
+			var matchPattern = 'n';
+			if (byLabel) {matchPattern += ":" + byLabel;}
+			var command = 'MATCH ('+matchPattern+') RETURN id(n), labels(n), (n)';
+			Neo4j_Command([command], callback);
+		}
+		
+		function Neo4jGetNodesByDetails(label, properties)
+		{
+			var callback = function (nodesResult) {
+				addSingleNodesFromResults(nodesResult);
+			}
+			var matchPattern = 'n';
+			if (label) {matchPattern += ":" + label;}
+			var command = 'MATCH ('+matchPattern+')';
+			if (properties){
+				if (properties.length > 0)
+				{
+					var conditions;
+					properties.forEach(function (prop) {
+						if (conditions) {conditions += ' AND'} else {conditions = ''}
+						conditions += ' n.' + prop.key + '=' + parseDataType(prop.value);
+					});
+					command += ' WHERE' + conditions;
+				}
+			}
+			command += ' RETURN id(n), labels(n), (n)';
+			Neo4j_Command([command], callback);
+		}
+		
+		/*
 		function Neo4j_GetNodesByLabel(byLabel)
 		{
 			var matchPattern = 'n';
@@ -2147,8 +2420,19 @@
 					}
 				});
 		}
+*/
 
+		function Neo4jInitAllNodes()
+		{
+			var callback = function (nodesResult) {
+				addSingleNodesFromResults(nodesResult);
+				Neo4jInitAllRelations();
+			}
+			var command = 'MATCH (n) RETURN id(n), labels(n), (n)';
+			Neo4j_Command([command], callback);
+		}
 		
+		/*
 		function Neo4j_InitAllNodes(byLabel)
 		{
 			
@@ -2192,8 +2476,18 @@
 				
 				
 		}
-
+		*/
 		
+		function Neo4jInitAllRelations()
+		{
+			var callback = function (relationsResult) {
+				addSingleRelationFromResults(relationsResult);
+			}
+			var command = 'MATCH (n)-[r]-(m) RETURN id(n), id(m), id(r), type(r), r';
+			Neo4j_Command([command], callback);
+		}
+		
+		/*
 		function Neo4j_InitAllRelations()
 		{
 		
@@ -2230,7 +2524,18 @@
 					}
 				});
 		}
+		*/
 		
+		function Neo4jCreateNode(labelName)
+		{
+			var callback = function (nodesResult) {
+				addSingleNodesFromResults(nodesResult);
+			}
+			var command = 'CREATE (n:' + labelName + ') RETURN id(n), labels(n), n';
+			Neo4j_Command([command], callback);
+		}
+		
+		/*
 		function Neo4j_CreateNode(labelName)
 		{
 			//var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
@@ -2263,7 +2568,20 @@
 					}
 				});
 		}
-
+		*/
+		
+		function Neo4jDeleteNode(nodeID)
+		{
+			var callback = function (nodesResult) {
+				//addSingleNodesFromResults(nodesResult);
+				removeNodeFromStage(nodeID)
+			}
+			var command = 'MATCH (n) where ID(n) = '+ nodeID +' DETACH DELETE (n) RETURN ID(n)';
+			Neo4j_Command([command], callback);
+			
+			
+		}
+		/*
 		function Neo4j_DeleteNode(NodeID)
 		{
 			//var URL = neo4jServerURL + "/db/data/transaction HTTP/1.1";
@@ -2281,61 +2599,50 @@
 					dataType: 'json',
 					success: function (returnbody) {	
 
-						for (var i = 0; i < returnbody.results.length; i++){
-							
-							var result = returnbody.results[i];
-							for (var d = 0; d < result.data.length; d++){
-								var row = result.data[d].row;
-								if (row[0]){
-									GRAPH.removeNode(row[0]);
-									selectedNodeID = '';
-									selectedNodeData = '';
-									selectedNode = '';
-								}
-							}
-						}					
+						
 					}
 				});
 		}
-	
+	*/
 
 		
 		
 //UI MANIPULATION
 		
 		
-		
+		/*
 		function connectUser(config){
 			
 			var userName, userPassword;
-			userPassword = config.neo4jconnection.password;
-			userName = config.neo4jconnection.username;
-			neo4jServerURL = config.neo4jconnection.server;
+			userPassword = config.neo4jconnections[0].password;
+			userName = config.neo4jconnections[0].username;
+			neo4jServerURL = config.neo4jconnections[0].server;
 			
 			//Call Base64 function to get token...
 			neo4jUserToken =  window.btoa(userName + ':' + userPassword);
 			
-			Neo4j_getAllLabels(); //..get all entity names from the DB
+			Neo4jGetAllLabels(); //..get all entity names from the DB
 			
 			startupLabels.forEach(function(label){
 					Neo4j_GetNodesByLabel(label);
-				});
+			});
 				
 			
 		}
+		*/
 		
 		function createNode(){
 			var newNodeValue = document.getElementById('newNodeData').value;
-			Neo4j_CreateNode(newNodeValue);
+			Neo4jCreateNode(newNodeValue);
 		}
 		
 		function getEntityNode(){
 			var newNodeValue = document.getElementById('nodeLabel').value;
-			Neo4j_GetNodesByLabel(newNodeValue);
+			Neo4jGetNodesByLabel(newNodeValue);
 		}
 		
 		function deleteNode(){
-			Neo4j_DeleteNode(selectedNodeID);
+			Neo4jDeleteNode(selectedNodeID);
 		}
 		
 		function refreshNodeAppearance(nodeId){
@@ -2385,7 +2692,7 @@
 			selectedNode.data.UI.displayTextUI.attr('y', fontsize - 1);
 		}
 		
-		function Neo4j_fetchRelation(fromNodeID, toNodeID)
+		function Neo4jFetchRelation(fromNodeID, toNodeID)
 		{
 			command = 'MATCH (n)-[r]-(m) WHERE ID(n) = ' + fromNodeID + ' and ID(m) = '+toNodeID+' RETURN id(startnode(r)), labels(startnode(r)), startnode(r) , id(r), type(r), r, id(endnode(r)), labels(endnode(r)), endnode(r)';
 			var callback2 = function(nodesResult){addNodesFromResults(nodesResult)};
@@ -2494,14 +2801,14 @@
 			
 		}
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-		function Neo4j_deleteLabel(nodeId, labelName)
+		function Neo4jDeleteLabel(nodeId, labelName)
 		{
 			var command = "MATCH (n) where ID(n) = " + nodeId + " REMOVE n:" + labelName;
-			var callback = function(){Neo4j_GetNodeById(selectedNodeID)};
+			var callback = function(){Neo4jGetNodeById(selectedNodeID)};
 			Neo4j_Command([command], callback, callback);
 		}	
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-		function Neo4j_addProperty(nodeId)
+		function Neo4jAddProperty(nodeId)
 		{
 			if (!nodeId) {nodeId=selectedNodeID}
 			var elePropKey = document.getElementById('add.property.key').value;
@@ -2511,21 +2818,21 @@
 			if (elePropType == "string"){elePropVal = '"' + elePropVal + '"'}
 			var command = "MATCH (n) where ID(n) = " + nodeId + " SET n +={" + elePropKey + ":" + elePropVal + "}";
 			
-			var callback = function(){Neo4j_GetNodeById(selectedNodeID)};
+			var callback = function(){Neo4jGetNodeById(selectedNodeID)};
 			Neo4j_Command([command], callback, callback);
 		}
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 		function addPropertyToChecked()
 		{
 			checkedNodes.forEach(function(node){
-				Neo4j_addProperty(node.id);
+				Neo4jAddProperty(node.id);
 			});
 		}
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 		function addPropertyToAll()
 		{
 			nodeList.forEach(function(node){
-				Neo4j_addProperty(node.id);
+				Neo4jAddProperty(node.id);
 			});
 		}
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2581,7 +2888,7 @@
 		}
 		
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------				
-		function Neo4j_addLabel()
+		function Neo4jAddLabel()
 		{
 			var processingElement = document.getElementById('log');
 			//node.data.labels.push(processingElement.value);
@@ -2589,14 +2896,14 @@
 			if(!processingElement.value) return;
 			
 			var callback = function(){
-				Neo4j_GetNodeById(selectedNodeID)
+				Neo4jGetNodeById(selectedNodeID)
 			};
 			
 			var command = "MATCH (n) where ID(n) = " + selectedNodeID + " SET n:" + processingElement.value;
 			Neo4j_Command([command], callback, callback);
 		}
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-		function Neo4j_getAllLabels()
+		function Neo4jGetAllLabels()
 		{
 			//var command = "match (n) return distinct labels(n)";
 			var command = "match (n) return labels(n), count(labels(n))";
@@ -2618,7 +2925,7 @@
 			html += '<table>'
 			node.data.labels.forEach(function(label, index){
 				if (index!=0){labellist += ', ';}
-				var button_onclick = 'Neo4j_deleteLabel(' + node.id + ', \'' + label + '\')';
+				var button_onclick = 'Neo4jDeleteLabel(' + node.id + ', \'' + label + '\')';
 				html += '<tr>'
 				html += '<td><button class="fortext tooltip" onclick="'+button_onclick+'" >X<div class="tooltiptext">delete label</div></button></td><td><a class="dataNameLabel">' + label + '</a></td>'	
 				html += '</tr>'
@@ -2851,7 +3158,7 @@
 			   if (bRelate==true)
 			   {
 					if (nodeId != selectedNodeID){
-						Neo4j_CreateRelation(selectedNodeID, nodeId)
+						Neo4jCreateRelation(selectedNodeID, nodeId)
 					}
 					bRelate=false;
 			   }
@@ -2859,7 +3166,7 @@
 			   if (bPlanRelate==true)
 			   {
 					if (nodeId != selectedNodeID){
-						Neo4j_CreateRelation(selectedNodeID, nodeId, true)
+						Neo4jCreateRelation(selectedNodeID, nodeId, true)
 					}
 					bPlanRelate=false;
 			   }
@@ -2982,7 +3289,6 @@
                 //     .attr('width', nodeSize)
                 //     .attr('height', nodeSize)
                 //     .link('https://secure.gravatar.com/avatar/' + node.data),
-				//console.log(node);
 				if (node.data.nodeType == 'data')
 				{
 					var nodeConfig = node.data.config.nodeDisplayBody;
@@ -3093,7 +3399,7 @@
 						//refreshNodeAppearance(detailsUI.attr('nodeid'));				
 					//}),
 					$(ui).dblclick(function() { // MOUSE CLICK
-						Neo4j_fetchEntitiesForNode();	
+						Neo4jFetchEntitiesForNode();	
 
 				
 					}),
@@ -3224,9 +3530,8 @@
 					$(ui).mousedown(function() { // MOUSE CLICK
 						//highlightSelectedNode(node.id);
 						node.data.UI.fullUI.attr('dragging', 'true');
-						
 					}),
-					
+
 					$(ui).mouseup(function() { // MOUSE CLICK
 						node.data.UI.fullUI.attr('dragging', 'false');
 						node.data.UI.fullUI.children[0].attr('r', node.data.nodeSize);
@@ -3234,14 +3539,12 @@
 						//var parentPos = layout.getNodePosition(node.data.superNodes[0].id);
 						//var thisPos = layout.getNodePosition(node.id);
 						//var distance = calculateDistance(parentPos, thisPos);
-						//console.log(distance);
 						//increaseNodeSize(node)
-						
 						//highlightSelectedNode(node.id);
 					}),
 					
 					$(ui).dblclick(function() { // MOUSE CLICK
-						//Neo4j_fetchEntitiesForNode();				
+						//Neo4jFetchEntitiesForNode();				
 					}),
 					$(ui).hover(function() { // MOUSE HOVER
 						//if (viewOptions.highlightRelated){highlightRelatedNodes(node.id, true);}
@@ -3355,7 +3658,7 @@
 						//refreshNodeAppearance(detailsUI.attr('nodeid'));				
 					//}),
 					$(ui).dblclick(function() { // MOUSE CLICK
-						Neo4j_fetchEntitiesForNode();				
+						Neo4jFetchEntitiesForNode();				
 					}),
 					$(ui).hover(function() { // MOUSE HOVER
 						if (viewOptions.highlightRelated){highlightRelatedNodes(node.id, true);}
@@ -3389,12 +3692,12 @@
 				if (nodeDragging == 'true' && nodetype=='subnode')
 				{
 					var parentNodeId = nodeUI.attr('parentnodeid')
-					//console.log(nodeUI);
 					var parentPos = layout.getNodePosition(parentNodeId);
 					var thisPos = layout.getNodePosition(nodeid);
 					var distance = calculateDistance(parentPos, thisPos);
 					
 					nodeUI.children[0].attr('r', distance/5);
+					//nodeUI.children[1].text(Math.ceil(distance/5)+'%');
 					fixNodeTextWidth(GRAPH.getNode(nodeid));
 				}
 				//}
@@ -4253,8 +4556,8 @@ select {
 }
 
 dialog {
-	width:200px;
-	height:300px;
+	width:400px;
+	height:200px;
 	//margin:5px;
 	//margin-left:10px;
 	padding:10px;
@@ -4269,13 +4572,16 @@ dialog {
 	font-size: 12px;
 	letter-spacing: 0px;
 }
-#myDialogText{
+dialog textarea{
+	resize: none;
 	//margin:5px;
 	border-radius:5px;
 	background-color:#4d4d4d;
 	color:white;
-	width:190px;
-	height:90%;
+	width:98%;
+	//max-width:190px;
+	height:85%;
+	//max-height:90%;
 }
 
 hr {
@@ -4322,21 +4628,21 @@ hr {
 			<tr>
 				<td>from entity:</td>
 				<td>
-					<select onchange="Neo4j_qbuilder('qbuilder.from.entity')" id="qbuilder.from.entity">
+					<select onchange="Neo4jQbuilder('qbuilder.from.entity')" id="qbuilder.from.entity">
 					</select>
 				</td>
 			</tr>
 			<tr >
 				<td>where:</td>
 				<td>
-				<select onchange="Neo4j_qbuilder('qbuilder.from.property')" id="qbuilder.from.property"></select>
+				<select onchange="Neo4jQbuilder('qbuilder.from.property')" id="qbuilder.from.property"></select>
 				</td>
 			</tr>
 			<tr>
 				<td>is:</td>
 				<td>
 					<!--select onchange="qbuilder('qbuilder.from.value')" id="qbuilder.from.value"></select-->
-					<input onchange="Neo4j_qbuilder('qbuilder.from.value')" id="qbuilder.from.value" type="text" name="" list="qbuilder.from.selectvalue">
+					<input onchange="Neo4jQbuilder('qbuilder.from.value')" id="qbuilder.from.value" type="text" name="" list="qbuilder.from.selectvalue">
 					<datalist id="qbuilder.from.selectvalue"></datalist>
 					
 				</td>
@@ -4345,27 +4651,27 @@ hr {
 			<!--tr>
 				<td>to entity:</td>
 				<td>
-					<select onchange="Neo4j_qbuilder('qbuilder.to.entity')" id="qbuilder.to.entity">
+					<select onchange="Neo4jQbuilder('qbuilder.to.entity')" id="qbuilder.to.entity">
 					</select>
 				</td>
 			</tr>
 			<tr >
 				<td>where:</td>
 				<td>
-				<select onchange="Neo4j_qbuilder('qbuilder.to.property')" id="qbuilder.to.property">
+				<select onchange="Neo4jQbuilder('qbuilder.to.property')" id="qbuilder.to.property">
 				</select>
 				</td>
 			</tr>
 			<tr>
 				<td>is:</td>
 				<td>
-					<input onchange="Neo4j_qbuilder('qbuilder.to.value')" id="qbuilder.to.from.value"></input>
+					<input onchange="Neo4jQbuilder('qbuilder.to.value')" id="qbuilder.to.from.value"></input>
 				</td>
 			</tr>
 			<button onclick='querySearch()'>Search</button-->
 			</table>
-			<button onclick='Neo4j_querySimpleSearch()'>Search</button>
-			<button onclick='Neo4j_queryRecursiveSearch()'>Tree Search</button>
+			<button onclick='ButtonSimpleSearch()'>Search</button>
+			<button onclick='Neo4jQueryRecursiveSearch()'>Tree Search</button>
 		</div>
 		
 		<div class='toolPanel'>		
@@ -4378,6 +4684,7 @@ hr {
 				</div>
 			</button>
 			<button onclick='animateTest()'>Add Indicator</button>
+			<button onclick='json2GraphDlg.showModal()'>Create from json</button>
 			<!--button onclick='testFunction()'>Test2</button-->
 			
 		</div>
@@ -4407,7 +4714,7 @@ hr {
 		<!--div class='toolPanel'>		
 			<div class="panelheader">Update selected entity:</div> 
 			<input id='log' value=''></input>
-			<button onclick='Neo4j_addLabel()'>Add Label</button>
+			<button onclick='Neo4jAddLabel()'>Add Label</button>
 		</div-->
 		
 		<!--div class='toolPanel'>		
@@ -4431,7 +4738,7 @@ hr {
 				</td>
 			</tr>
 			</table>
-			<button onclick='Neo4j_addProperty()'>Selected</button>
+			<button onclick='Neo4jAddProperty()'>Selected</button>
 			<button onclick='addPropertyToChecked()'>Highlighted</button>
 			<button onclick='addPropertyToAll()'>All</button>
 		</div-->
@@ -4451,7 +4758,7 @@ hr {
 			<table id='panel.update.entity.props'>
 			</table>
 			<hr>
-			<button onclick='Neo4j_addProperty()'>Selected</button>
+			<button onclick='Neo4jAddProperty()'>Selected</button>
 			<button onclick='addPropertyToChecked()'>Highlighted</button>
 			<button onclick='addPropertyToAll()'>All</button>
 		</div-->
@@ -4475,8 +4782,8 @@ hr {
 			<table id='panel.entity.props'>
 			</table>
 			<hr>
-			<button onclick='Neo4j_CreateEntity()'>Create New Entity</button>
-			<button onclick='Neo4j_UpdateEntity()'>Update Selected</button>
+			<button onclick='Neo4jCreateEntity()'>Create New Entity</button>
+			<button onclick='Neo4jUpdateEntity()'>Update Selected</button>
 			<button onclick='deleteNode()'>Delete Selected</button>
 		</div>
 
@@ -4506,14 +4813,14 @@ hr {
 		<div class='toolPanel'>
 			<div> 
 				<div class="panelheader">Apply to ALL</div>
-				<button onclick='Neo4j_InitAllNodes()'>Fetch</button>
-				<button onclick='unPinAllNodes()'>Unpin</button>
 				<button class="popup" >Check
 					<div class="popuptext">
 						<div id="hovertext" onclick='uncheckAll()'>Uncheck all</div>
 						<div id="hovertext" onclick='checkAll()'>Check all</div>
 					</div>
 				</button>
+				<button onclick='Neo4jInitAllNodes()'>Fetch</button>
+				<button onclick='unPinAllNodes()'>Unpin</button>
 				<button onclick='arrangeBy()'>Arrange</button>
 			</div>
 		</div>
@@ -4604,5 +4911,12 @@ hr {
 		<button onclick="closeDialog('myDialog')">Close</button>
 		
 	</dialog>	
+	
+	<dialog class='dialog' id="json2GraphDlg">
+		<textarea id="dlg.text.json"></textarea>
+		<button onclick="submitJsonForGraph()">Submit</button>
+		<button onclick="closeDialog('json2GraphDlg')">Cancel</button>
+	</dialog>	
+	
 
 </html>

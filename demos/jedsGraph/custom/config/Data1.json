@@ -29,7 +29,7 @@ Configuration:{
 		],
 		nodeDisplayValues:[
 		  /*{label:"SOME_LABEL", displayField??label, displayLabel??label},*/
-			//{label:"Determiner", displayField:"name"}
+			{label:"Determiner", displayField:"name"}
 		],
 		nodeDisplayBody: [
 		  /*{label:"SOME_LABEL", "image":"IMAGE_URL"??none, "color":"HEXVALUE"??auto, "size":30, "labelPos":"above/under/left/right"??center},*/
