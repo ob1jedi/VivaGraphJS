@@ -1899,7 +1899,7 @@
 				link.data.displayLabel = linkData.name;
 				linkList.push(link); //new linkType(fromNodeID,toNodeID, linkData, linkData.id)); 
 				fixLinkIndexes(fromNodeID, toNodeID);
-				//fixLinkTextWidth(link);
+				//fixTextWidth4Link(link);
 			}
 
 			var toNode = GRAPH.getNode(toNodeID);
@@ -1930,14 +1930,17 @@
 				if (config_ext.viewOptions.nodeSizing == 'relationCount'){increaseNodeSize(fromNodeID); increaseNodeSize(toNodeID);}
 				if (config_ext.viewOptions.nodeSizing == 'outRelationCount' ) {increaseNodeSize(fromNodeID);}
 				if (config_ext.viewOptions.nodeSizing == 'inRelationCount' ) {increaseNodeSize(toNodeID);}
-				
 			}
+			
+			fixTextWidth4Link(link);
 		}
 		
 		function refreshLinkVisual(link)
 		{
 			if(link.data.UI.nameTextUI){link.data.UI.nameTextUI.innerHTML = link.data.displayLabel;}
 			if(link.data.UI.subTextUI){link.data.UI.subTextUI.innerHTML = propertyListToSvgList(link.data.properties, '<tspan x="0" dy="1.2em">', '</tspan>');}
+			
+			//link.data.UI.subTextUI.attr('x', link.data.UI.subTextUI.getBBox().width/2)
 			//toggle twice to refresh link...
 			toggleLink(link);
 			toggleLink(link);
@@ -2496,14 +2499,23 @@
 			
 		}
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-		function fixLinkTextWidth(link)
+		function fixTextWidth4Link(link)
 		{
 			if(link.data.UI.nameTextUI && link.data.UI.midMarkerUI){
 				var textWidth = link.data.UI.nameTextUI.getBBox().width;
 				link.data.UI.nameTextUI.attr('x', -textWidth/2);
 				link.data.UI.fullUI.attr('labelWidth',textWidth);
-			}
 				
+				if(link.data.UI.subTextUI){
+					var i = 0;
+					var boxWidth = link.data.UI.subTextUI.getBBox().width;
+					while (link.data.UI.subTextUI.children[i]){
+						$(link.data.UI.subTextUI.children[i]).attr('x', -boxWidth/2);
+						console.log(link.data.UI.subTextUI.children[i]);
+						i++;
+					}
+				}
+			}
 		}
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 		function fixTextWidth4Node(node)
@@ -2895,13 +2907,13 @@
 			link.data.UI.nameTextUI = CommonUI.linkName.cloneNode();
 			link.data.UI.nameTextUI.innerHTML = link.data.displayLabel;
 			if(link.data.UI.midMarkerUI) {link.data.UI.midMarkerUI.append(link.data.UI.nameTextUI);}
-			fixLinkTextWidth(link);
 			
 			if(currentTheme.sourceConfig.displaySettings.showRelationProperties){			
 				link.data.UI.subTextUI = CommonUI.linkProps.cloneNode();
 				link.data.UI.subTextUI.innerHTML = propertyListToSvgList(link.data.properties, '<tspan x="0" dy="1.2em">', '</tspan>');
 				if(link.data.UI.midMarkerUI) {link.data.UI.midMarkerUI.append(link.data.UI.subTextUI);}
 			}
+			fixTextWidth4Link(link);
 		}
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 		function checkNode(node)
