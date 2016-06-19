@@ -19,22 +19,22 @@ configManager.configs.push({
 		prefetchLabelSelectors:false,
 		prefetchCounts:false,
 		panels:[
-			//{name:"PANEL.NAME", parent:""/"leftColumn"/"rightColumn"/"topBar", visible:BOOL}
-			 {name:"panel.labelselectors", parent:"leftColumn", visible:true}
-			,{name:"panel.config", parent:"leftColumn", visible:true}
-			,{name:"panel.nodedetails", parent:"leftColumn", visible:true}
-			,{name:"panel.linkdetails", parent:"leftColumn", visible:true}
-			,{name:"panel.simplequery", parent:"leftColumn", visible:true}
-			,{name:"panel.functions", parent:"leftColumn", visible:true}
-			,{name:"panel.monitoring", parent:"leftColumn", visible:true}
+			//{name:"PANEL.NAME", parent:""/"leftColumn"/"rightColumn"/"topBar", visible:BOOL, icon:"bootstrap glyph icon"}
+			 {name:"panel.labelselectors", parent:"leftColumn", available:true, visible:true, icon:"glyphicon glyphicon-indent-right", desc:"selectors"}
+			,{name:"panel.config", parent:"leftColumn", available:true, visible:true, icon:"glyphicon glyphicon-adjust", desc:"config"}
+			,{name:"panel.nodedetails", parent:"leftColumn", available:true, visible:true, icon:"glyphicon glyphicon-dashboard", desc:"entity details"}
+			,{name:"panel.linkdetails", parent:"leftColumn", available:true, visible:true, icon:"glyphicon glyphicon-sort-by-order", desc:"relationship details"}
+			,{name:"panel.simplequery", parent:"leftColumn", available:true, visible:true, icon:"glyphicon glyphicon-search", desc:"query"}
+			,{name:"panel.functions", parent:"leftColumn", available:true, visible:false, icon:"glyphicon glyphicon-th-large", desc:"functions"}
+			,{name:"panel.monitoring", parent:"leftColumn", available:true, visible:true, icon:"glyphicon glyphicon-asterisk", desc:"monitoring"}
 			
-			,{name:"panel.entity.create", parent:"leftColumn", visible:true}
-			,{name:"panel.relationship.create", parent:"leftColumn", visible:true}
-			,{name:"panel.bulkactions", parent:"leftColumn", visible:true}
-			,{name:"panel.appearance", parent:"leftColumn", visible:true}
-			,{name:"panel.selection", parent:"leftColumn", visible:true}
-			,{name:"panel.highlight", parent:"leftColumn", visible:true}
-			,{name:"panel.navigation", parent:"leftColumn", visible:true}
+			,{name:"panel.entity.create", parent:"rightColumn", available:true, visible:true, icon:"glyphicon glyphicon-plus-sign", desc:"create entity"}
+			,{name:"panel.relationship.create", parent:"rightColumn", available:true, visible:true, icon:"glyphicon glyphicon-registration-mark", desc:"create relationship"}
+			,{name:"panel.bulkactions", parent:"rightColumn", available:true, visible:true, icon:"glyphicon glyphicon-list", desc:"bulk actions"}
+			,{name:"panel.appearance", parent:"rightColumn", available:true, visible:false, icon:"glyphicon glyphicon-certificate", desc:"appearance"}
+			,{name:"panel.selection", parent:"rightColumn", available:true, visible:true, icon:"glyphicon glyphicon-ok-sign", desc:"select options"}
+			,{name:"panel.highlight", parent:"rightColumn", available:true, visible:false, icon:"glyphicon glyphicon-eye-open", desc:"hover options"}
+			,{name:"panel.navigation", parent:"rightColumn", available:true, visible:false, icon:"glyphicon glyphicon-hand-up", desc:"navigation options"}
 		],
 		subnodes:{relations:"ifany"},
 		nodeSizing:"relationCount" /*relationCount/outRelationCount/inRelationCount(increase node size based on relationships)*/
