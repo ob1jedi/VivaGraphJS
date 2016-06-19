@@ -4,9 +4,9 @@
     <title>Graph Engine</title>
     <script type="text/javascript" src="deps/vivagraph.js"></script>
 	<script type="text/javascript" src="custom/configloader.json"></script>
-	<script type="text/javascript" src="custom/Data1.json"></script>
+	<script type="text/javascript" src="custom/defaultConfig.json"></script>
 	<script type="text/javascript" src="custom/config/Schema.json"></script>
-	
+	<script type="text/javascript" src="custom/config/Data.json"></script>
     <!--
     This example uses jQuery, but it's only for convenience of listenting
     to DOM events. The jQuery can be replaced with your favorite library.
@@ -24,8 +24,7 @@
 		var labelsList = []; //list of "neoLabel" objects
 		var nodeList = []; //list of "node" objects
 		var monitoredNodes = [];//list of "node" objects
-		//var fadedNodes = [];
-		
+		var toolPanels = [];
 		var monitoredLinks = []; //list of "link" objects
 		var animUpdateNodes = [];//list of "node" objects
 		var animUpdateLinks = []; //list of "link" objects
@@ -77,7 +76,9 @@
 		
 		Configuration(setConfigSettings); //get config, setup common UI
 		//Configuration(connectUser);
+		//setup UI
 		checkTimeoutElements() //start monitoring timeout elements
+		
 	
 //MODELS	
 		//Node model
@@ -152,7 +153,7 @@
 		}
 		
 		//Link model
-		function datay(fromNodeId, toNodeId, linkId, name){
+		function datay(fromNodeId, toNodeId, linkId, name, sourceConfig){
 			this.linkType = 'data';
 			//this.source; //...neo4jConnectionType
 			this.fromNodeID = fromNodeId;
@@ -170,6 +171,10 @@
 			this.sourceConfig = currentTheme.sourceConfig;
 			//this.config.linkDisplayBody = {};
 			this.config.linkDisplayValues = {};
+			
+			if (sourceConfig){
+				this.color = sourceConfig.displaySettings.linkColor
+			}
 			return this;
 		}
 		
@@ -189,8 +194,9 @@
 			this.userToken =  window.btoa(username + ':' + password);
 		}
 		
-		function neoLabel(setName, setColor, setColorRGB)
+		function neoLabel(setName, setColor, setColorRGB, setSourceConfig)
 		{
+			this.sourceConfig = setSourceConfig;
 			this.instanceCount = 0;
 			this.name = setName;
 			this.color = setColor;
@@ -288,12 +294,47 @@
 			//});
 
 			//setting up panels...
+			$topBar = document.getElementById('topBar');
+			$topBar.addEventListener('dragenter', handleDragEnter, false);
+			$topBar.addEventListener('dragover', handleDragOver, false);
+			$topBar.addEventListener('dragleave', handleDragLeave, false);
+			$topBar.addEventListener('drop', handleDrop, false);
+			//$topBar.addEventListener('dragend', handleDragEnd, false);
+			
 			config.viewOptions.panels.forEach(function(panel){
-				var elParent = document.getElementById(panel.parent)
-				var elPanel = document.getElementById(panel.name);
-				elParent.innerHtml += elPanel;
-				//elPanel.attr('visibility', (panel)?'visible':'hidden');
-				//{"panels":[{"name":"panelSelectionOptions", "parent":"leftColumn", "visibility":true}]}
+				//jed3
+				//$elParent = document.getElementById(panel.parent)	
+				$elPanel = document.getElementById(panel.name);
+				//elParent.innerHtml += elPanel;
+				//$elPanel.style.visibility = (panel.visible)?'visible':'hidden';
+				
+				if (panel.visible){
+					$parentContainer = document.getElementById(panel.parent);
+					if ($parentContainer){
+						if (panel.parent == "topBar"){
+							
+						}
+						else{
+							$parentContainer.appendChild($elPanel);
+						}
+					}
+					
+					$elPanel.setAttribute('draggable', true);
+					$elPanel.addEventListener('dragstart', handleDragStart, false);
+					//$elPanel.addEventListener('dragenter', handleDragEnter, false);
+					//$elPanel.addEventListener('dragover', handleDragOver, false);
+					//$elPanel.addEventListener('dragleave', handleDragLeave, false);
+					//$elPanel.addEventListener('drop', handleDrop, false);
+					$elPanel.addEventListener('dragend', handleDragEnd, false);
+					toolPanels.push($elPanel);
+				}
+				else{
+					$elPanel.remove();
+					var isOpen = $elPanel.classList.contains('slide-in');
+					$elPanel.setAttribute('class', isOpen ? 'toolPanel slide-out' : 'toolPanel slide-in');
+				}
+				
+				////{"panels":[{"name":"panelSelectionOptions", "parent":"leftColumn", "visibility":true}]}
 			});
 
 			//Set global variable
@@ -302,23 +343,83 @@
 			setupCommonUI();
 
 			//GET ALL LABELS>>
-			Neo4jGetAllLabels(currentTheme.sourceConfig); //..get all entity names from the DB
-			
-			//GET STARTUP NODES>>
-			config.startupOptions.startupSearch.forEach(function(search, index){
-				Neo4jGetNodesByDetails(search.label, search.properties)
-			});
-			//RUN STARTUP QUERIES>>
-			config.startupOptions.startupQueries.forEach(function(search, index){
-				Neo4jQuerySimpleSearch(search.fromEntity, search.whereProperty, search.equalsValue);
+			masterConfigs.forEach(function (cnf){
+				if (cnf.viewOptions.prefetchLabelSelectors){
+					Neo4jGetAllLabels(cnf); //..get all entity names from the DB
+				}
+				
+				//GET STARTUP NODES>>
+				cnf.startupOptions.startupSearch.forEach(function(search, index){
+					Neo4jGetNodesByDetails(search.label, search.properties, cnf)
+				});
+				
+				//RUN STARTUP QUERIES>>
+				cnf.startupOptions.startupQueries.forEach(function(search, index){
+					Neo4jQuerySimpleSearch(search.fromEntity, search.whereProperty, search.equalsValue, cnf);
+				});
 			});
 			
 		}
 		
+		
+		//................Tool panels - Drag and drop................
+		function handleDragOver(e) {
+		  if (e.preventDefault) {
+			e.preventDefault(); // Necessary. Allows us to drop.
+		  }
+		  e.dataTransfer.dropEffect = 'move';  // See the section on the DataTransfer object.
+		  return false;
+		}
+		function handleDragStart(e) {
+		  this.style.opacity = '0.4';  // this / e.target is the source node.
+		}
+		function handleDragLeave(e) {
+		  this.classList.remove('over');  // this / e.target is previous target element.
+		}
+		function handleDragEnter(e) {
+		  // this / e.target is the current hover target.
+		  this.classList.add('over');
+		}
+		function handleDrop(e) {
+		  // this / e.target is current target element.
+		  if (e.stopPropagation) {
+			e.stopPropagation(); // stops the browser from redirecting.
+		  }
+		  // See the section on the DataTransfer object.
+		  return false;
+		}
+		function handleDragEnd(e) {
+		  // this/e.target is the source node.
+		  this.style.opacity = '0.9';
+		  toolPanels.forEach(function (col) {
+			col.classList.remove('over');
+		  });
+		}
+		//................................................................................
+		
+		//function setupUI()
+		//{
+			/*var $slider = document.getElementById('slider');
+			var $leftColumn = document.getElementById('leftColumn');
+			var $toggle = document.getElementById('toggle');	
+			$toggle.addEventListener('click', function() {
+				var isOpen = $slider.classList.contains('slide-in');
+				if(isOpen){
+					$leftColumn.appendChild($slider);
+				}
+				else{
+					$leftColumn.removeChild($slider);
+				}
+				$slider.setAttribute('class', isOpen ? 'toolPanel slide-out' : 'toolPanel slide-in');
+			});*/
+		//}
+		
+
+
 		//Get config file...
 		function Configuration(callback)
 		{
-				$(document).ready(function(e) {
+			$(document).ready(function(e) {
 				configManager = configManager; //config manager from file
 				
 				if (configManager.configs.length == 0) {
@@ -338,7 +439,7 @@
 					selectorElement.innerHTML += '<option value="'+cnf.configName+'">' + cnf.configName + '</option>';
 				});
 				
-				
+				//setupUI();
 				
 				callback(masterConfigs[0]);	
 				
@@ -412,7 +513,7 @@
 			//markerProperties.innerHTML = propertyListToSvgList(link.data.properties, '<tspan x="0" dy="1.2em">', '</tspan>');
 					
 			CommonUI.popoutInfoUI = Viva.Graph.svg('g');
-			//jed
+
 			CommonUI.popoutTextUI = Viva.Graph.svg('text')
 						//.attr('class', 'slidetext')
 						.attr('y', 0) //node.data.nodeSize/2 + 5)
@@ -434,7 +535,7 @@
                         .attr('height', 0)
 						.attr('fill','#141414')
 						//.attr('width','20%')
-						//jed
+
                     if (!currentTheme.sourceConfig.displaySettings.opaque) {CommonUI.popoutBodyUI.attr('fill-opacity',0.3);}
 					
 			CommonUI.popoutInfoUI.append(CommonUI.popoutBodyUI);
@@ -1075,11 +1176,11 @@
 		
 
 		
-		function getNeoLabel(byName)
+		function getNeoLabel(byName, sourcePrefix)
 		{
 			var x;
 				labelsList.forEach(function(labelobj, index){
-				if (labelobj.name == byName){
+				if (labelobj.name == byName &&  labelobj.sourceConfig.prefix == sourcePrefix){
 					x = labelobj;
 					return labelobj;
 				}
@@ -1244,7 +1345,7 @@
 		
 		function addDataLabel(labelName, _addInstanceCount, _sourceConfig)
 		{	
-			var existingLabelSelector = getNeoLabel(labelName);
+			var existingLabelSelector = getNeoLabel(labelName, _sourceConfig.prefix);
 			if(existingLabelSelector) 
 			{
 				if(_addInstanceCount){existingLabelSelector.instanceCount += _addInstanceCount};
@@ -1257,37 +1358,38 @@
 								   g: Math.ceil(getRandomArbitrary(_sourceConfig.displaySettings.entityRgbRange.min, _sourceConfig.displaySettings.entityRgbRange.max)),
 								   b: Math.ceil(getRandomArbitrary(_sourceConfig.displaySettings.entityRgbRange.min, _sourceConfig.displaySettings.entityRgbRange.max))
 						}
-						var randomColor = rgb2hex(rgb.r, rgb.g, rgb.b);
-						var newDataLabel = new neoLabel(labelName, randomColor, rgb);
-						if (_addInstanceCount) {newDataLabel.instanceCount += _addInstanceCount;}
-						//Add new data label to labels-list
-						labelsList.push(newDataLabel);
-						labelsList.sort(sort_by('name', false, function(a){ if (a) {return a.toUpperCase()} }));
-						
-						//Add selector to HTML...
-						var qbuilderFromEntitySelector = document.getElementById('qbuilder.from.entity');
-						var qbuilderToEntitySelector = document.getElementById('qbuilder.to.entity');
-						var LabelsDiv = document.getElementById('selectorLabels');
-						
-						var color = 'gray';
-						var button_onclick = "Neo4jGetNodesByLabel()";
-						var fetchButton = '<button id="labelSelector.fetcher.All" class="forlabelselector tooltip" onclick="'+button_onclick+'"> <div class="tooltiptext">Fetch from database</div></button>'
-						
-						
-						LabelsDiv.innerHTML = '<tr><td><div onclick="highlightLabel()" id="labelSelectorPanel" style="background-color:'+color+';">All</div></td><td>' + fetchButton + '</tr><td></tr>';
-						qbuilderFromEntitySelector.innerHTML = '<option value=""></option>';
-						
-							labelsList.forEach(function(label,index){
-							LabelsDiv.innerHTML += '<tr>';
-							button_onclick = "Neo4jGetNodesByLabel('"+label.name+"')";
-							fetchButton = '<button id="labelSelector.fetcher.'+label.name+'" class="forlabelselector tooltip" style="background-color:'+label.color+'" onclick="'+button_onclick+'">'+label.instanceCount+'<div class="tooltiptext">Fetch from database</div></button>'
-							LabelsDiv.innerHTML+= '<td><div onclick="highlightLabel('+index+')" id="labelSelectorPanel" style="background-color:'+color+';">' + label.name +'</div></td><td>'+fetchButton+'</td>';
-							qbuilderFromEntitySelector.innerHTML += '<option value="'+label.name+'">' +label.name+ '</option>';
-							LabelsDiv.innerHTML+= '</tr>';
-						});
-
+			var randomColor = rgb2hex(rgb.r, rgb.g, rgb.b);
+			var newDataLabel = new neoLabel(labelName, randomColor, rgb, _sourceConfig);
+			if (_addInstanceCount) {newDataLabel.instanceCount += _addInstanceCount;}
+			//Add new data label to labels-list
+			labelsList.push(newDataLabel);
 						
 			return newDataLabel;
+		}
+		
+		function refreshLabelSelectors(){
+			//Order label selectors...
+			labelsList.sort(sort_by('name', false, function(a){ if (a) {return a.toUpperCase()} }));
+			//Add selector to HTML...
+			var qbuilderFromEntitySelector = document.getElementById('qbuilder.from.entity');
+			//var qbuilderToEntitySelector = document.getElementById('qbuilder.to.entity');
+			var LabelsDiv = document.getElementById('selectorLabels');
+			
+			var color = 'gray';
+			var button_onclick = "Neo4jGetNodesByLabel(false, '"+ currentTheme.sourceConfig.prefix +"')";
+			var fetchButton = '<button id="labelSelector.fetcher.All" class="forlabelselector tooltip" onclick="'+button_onclick+'"> <div class="tooltiptext">Fetch from database</div></button>'
+			
+			if (LabelsDiv) {LabelsDiv.innerHTML = '<tr><td><div onclick="highlightLabel()" id="labelSelectorPanel" style="background-color:'+ color +';">All</div></td><td>' + fetchButton + '</tr><td></tr>';}
+			if (qbuilderFromEntitySelector) {qbuilderFromEntitySelector.innerHTML = '<option value=""></option>';}
+			
+			labelsList.forEach(function(label,index){
+				color = label.sourceConfig.displaySettings.selectorColor;
+				
+				button_onclick = "Neo4jGetNodesByLabel('"+label.name+"', '"+ label.sourceConfig.prefix +"')";
+				fetchButton = '<button id="labelSelector.fetcher.'+label.name+'" class="forlabelselector tooltip" style="background-color:'+label.color+'" onclick="'+button_onclick+'">'+label.instanceCount+'<div class="tooltiptext">Fetch from database</div></button>'
+				if (LabelsDiv) {LabelsDiv.innerHTML+= '<tr><td><div onclick="highlightLabel('+index+')" id="labelSelectorPanel" style="background-color:'+color+';">' + label.name +'</div></td><td>'+fetchButton+'</td></tr>';}
+				if (qbuilderFromEntitySelector) {qbuilderFromEntitySelector.innerHTML += '<option value="' + label.name + label.sourceConfig.prefix + '">' +( label.name + " (" +label.sourceConfig.prefix+ ")") + '</option>';}
+			});
 		}
 		
 		function addDataNode(nodeId, nodeData, _sourceConfig)
@@ -1334,21 +1436,22 @@
 			}
 			
 			//find config for node if any is specified...
-			config_ext.startupOptions.nodeDisplayBody.map(function (nconfig) {if (nconfig.label == nodeData.labels[0]) {nodeData.config.nodeDisplayBody = nconfig;}});
-			config_ext.startupOptions.nodeDisplayValues.map(function (nconfig) {if (nconfig.label == nodeData.labels[0]) {nodeData.config.nodeDisplayValues = nconfig;}});
+			_sourceConfig.startupOptions.nodeDisplayBody.map(function (nconfig) {if (nconfig.label == nodeData.labels[0]) {nodeData.config.nodeDisplayBody = nconfig;}});
+			_sourceConfig.startupOptions.nodeDisplayValues.map(function (nconfig) {if (nconfig.label == nodeData.labels[0]) {nodeData.config.nodeDisplayValues = nconfig;}});
 			//set display label...
 			nodeData.displayLabel = "";
 			nodeData.labels.forEach(function(label, index){
 				addDataLabel(label, undefined, nodeData.sourceConfig);
+				refreshLabelSelectors();
 				if (nodeData.displayLabel) {nodeData.displayLabel += ','}
 				if(!nodeData.displayLabel) {nodeData.displayLabel = '';}
 				if (nodeData.config.nodeDisplayValues.displayField){
-					if (nodeData.displayLabel!=""){nodeData.displayLabel +'\n';}
+					if (nodeData.displayLabel!=""){nodeData.displayLabel + '\n';}
 					var propertyValue = getNodePropertyValue(nodeData.properties, nodeData.config.nodeDisplayValues.displayField);
 					nodeData.displayLabel += propertyValue ? propertyValue : ' ';
 				}
 				if(nodeData.config.nodeDisplayValues.displayValue){
-					if (nodeData.displayLabel!=""){nodeData.displayLabel +'\n';}
+					if (nodeData.displayLabel!=""){nodeData.displayLabel + '\n';}
 					nodeData.displayLabel += nodeData.config.nodeDisplayValues.displayValue;
 				}
 				if(nodeData.displayLabel=="") {
@@ -1356,7 +1459,7 @@
 				}
 			});
 			//nodeData.displayLabel;
-			var aNeoLabel = getNeoLabel(nodeData.labels[0]);
+			var aNeoLabel = getNeoLabel(nodeData.labels[0], _sourceConfig.prefix);
 			if (aNeoLabel) {
 				nodeData.nodeColor = aNeoLabel.color; 
 				nodeData.nodeColorRGB = aNeoLabel.colorRGB;
@@ -1366,7 +1469,7 @@
 			if (isNewNode){
 				dataNode = addNodeToGraph(nodeId,nodeData);	
 				nodeList.push(dataNode);
-				if (config_ext.viewOptions.prefetchCounts==true){
+				if (_sourceConfig.viewOptions.prefetchCounts==true){
 					var updateIndicatorNode = function (toCount, fromCount){
 						dataNode.data.totalToLinks = toCount;
 						dataNode.data.totalFromLinks = fromCount;
@@ -1423,11 +1526,11 @@
 
 			
 			
-			var linkData = new datay();
+			var linkData = new datay(parent.id, subNodeData.id, parent.id +' ' + subNodeData.id);
 			linkData.linkType = 'sub';
 			linkData.color = color;
-			linkData.fromNodeID = parent.id;
-			linkData.toNodeID = subNodeData.id;
+			//linkData.fromNodeID = parent.id;
+			//linkData.toNodeID = subNodeData.id;
 			var toRelLink = GRAPH.addLink(parentNode.id, subNodeData.id, linkData);
 			subNode.data.fromLinks.push(toRelLink);
 			
@@ -1461,9 +1564,21 @@
 			return valueList;
 		}
 		
-		function Neo4jQbuilder(selectType, _sourceConfig)
+		function Neo4jQbuilder_ClearValue(selectType)
 		{
 			var scope = selectType.split('.');
+			document.getElementById('qbuilder.' + scope[1] + '.value').value = '';
+			//document.getElementById('qbuilder.'+scope[1]+'.selectvalue').innerHTML = '<option value=""></option>';
+		}
+		
+		function Neo4jQbuilder(selectType, _sourceConfig)
+		{
+			var scope = selectType.split('.'); //...scope[0] = "qbuilder", scope[1] = "from"/"to", scope[2] = "entity"/"property"/"value"
+			var selectedEntityValue = document.getElementById('qbuilder.' + scope[1] + '.entity').value;
+			var sourcePrefix = selectedEntityValue.substring(selectedEntityValue.length-3);
+			var entityName = ':' + selectedEntityValue.substring(0, selectedEntityValue.length-3);
+			//if (entityName && entityName != ''){entityName = ':' +entityName;} 
+			
 			if (scope[2] == 'entity'){
 				//get properties...
 				document.getElementById('qbuilder.' + scope[1] + '.value').value = '';
@@ -1473,8 +1588,12 @@
 				//document.getElementById('qbuilder.'+scope[1]+'.value').innerHTML = '';
 				document.getElementById('qbuilder.'+scope[1]+'.selectvalue').innerHTML = '<option value=""></option>';
 				
-				var selectedTypeValue = document.getElementById(selectType).value;
-				var command = "MATCH (n:"+selectedTypeValue+") return n";
+				//var selectedEntityValue = document.getElementById(selectType).value;
+				//var sourcePrefix = selectedEntityValue.substring(selectedEntityValue.length-3);
+				//var entityName = selectedEntityValue.substring(0, selectedEntityValue.length-3);
+			
+				
+				var command = "MATCH (n"+ entityName + ") return n";
 				var listedProperties = [];
 				var callback = function(nodesResult, sourceConfig){
 					var propertyList = Neo4jExtractProperties(nodesResult)
@@ -1485,20 +1604,20 @@
 						}
 					});
 				};
-				Neo4j_Command([command], callback, _sourceConfig);
+				Neo4j_Command([command], callback, getConfigByPrefix(sourcePrefix));
 			}
 			if (scope[2] == 'property'){
-				var childElementName = 'qbuilder.' + scope[1] + '.selectvalue';
+				var valueElementName = 'qbuilder.' + scope[1] + '.selectvalue';
 				document.getElementById('qbuilder.' + scope[1] + '.value').value = '';
-				var selectedEntity = document.getElementById('qbuilder.'+scope[1]+'.entity').value;
+				//var selectedEntity = document.getElementById('qbuilder.'+scope[1]+'.entity').value;
 				var selectedProperty = document.getElementById('qbuilder.'+scope[1]+'.property').value;
-				childElementName.innerHTML = '<option value=""></option>';
+				//valueElementName.innerHTML = '<option value=""></option>';
 				var listedValues = [];
 				if (!selectedProperty){ return;}
-				var command = "MATCH (n:"+selectedEntity+") return distinct n." + selectedProperty;
+				var command = "MATCH (n"+entityName+") return distinct n." + selectedProperty;
 				var callback = function(nodesResult, sourceConfig){
 					var valueList = Neo4jExtractValues(nodesResult)
-					var valueElement = document.getElementById(childElementName);
+					var valueElement = document.getElementById(valueElementName);
 					valueElement.innerHTML = '<option value=""></option>';	
 					valueList.sort().forEach(function(prop){
 						if (listedValues.indexOf(prop) == -1){ 
@@ -1507,35 +1626,40 @@
 						}
 					});
 				};
-				Neo4j_Command([command], callback, _sourceConfig);
+				Neo4j_Command([command], callback, getConfigByPrefix(sourcePrefix));
 			}
 		}
 		
 		function ButtonSimpleSearch()
 		{
-			var fromEntity = document.getElementById('qbuilder.from.entity').value;
+			//var fromEntity = document.getElementById('qbuilder.from.entity').value;
+			var selectedEntityValue = document.getElementById('qbuilder.from.entity').value;
+			var sourcePrefix = selectedEntityValue.substring(selectedEntityValue.length-3);
+			var entityName = selectedEntityValue.substring(0, selectedEntityValue.length-3);
+			
 			var fromProperty = document.getElementById('qbuilder.from.property').value;
 			var fromValue = document.getElementById('qbuilder.from.value').value;
-			Neo4jQuerySimpleSearch(fromEntity, fromProperty, fromValue, currentTheme.sourceConfig);
+			Neo4jQuerySimpleSearch(entityName, fromProperty, fromValue, getConfigByPrefix(sourcePrefix));
 		}
 		
 		function Neo4jQuerySimpleSearch(fromEntity, whereProperty, equalsValue, _sourceConfig)
 		{
 			var propertyBlock = (whereProperty)?'{'+whereProperty+':'+parseDataType(equalsValue)+'}':'';
 			
-			var command = 'MATCH (n:'+fromEntity + propertyBlock + ') RETURN id(n), labels(n), n';
+			if (fromEntity && fromEntity != ''){fromEntity = ':' + fromEntity;}
+			var command = 'MATCH (n'+fromEntity + propertyBlock + ') RETURN id(n), labels(n), n';
 			var callback = function(nodesResult, sourceConfig){
 				addSingleNodesFromResults(nodesResult, sourceConfig)
 				
 				//Recurse...
-				var command = 'MATCH (n:'+fromEntity + propertyBlock+')-[r]-(m) RETURN id(startnode(r)), labels(startnode(r)), startnode(r) , id(r), type(r), r, id(endnode(r)), labels(endnode(r)), endnode(r)';
+				var command = 'MATCH (n'+fromEntity + propertyBlock+')-[r]-(m) RETURN id(startnode(r)), labels(startnode(r)), startnode(r) , id(r), type(r), r, id(endnode(r)), labels(endnode(r)), endnode(r)';
 				var callback2 = function(nodesResult, sourceConfig){addNodesFromResults(nodesResult, sourceConfig)};
 				Neo4j_Command([command], callback2, sourceConfig);
 			};
 			Neo4j_Command([command], callback, _sourceConfig);
 		}
 		
-		function Neo4jQueryRecursiveSearch(_sourceConfig)
+		/*function Neo4jQueryRecursiveSearch(_sourceConfig)
 		{
 			var fromEntity = document.getElementById('qbuilder.from.entity').value;
 			var fromProperty = document.getElementById('qbuilder.from.property').value;
@@ -1561,6 +1685,7 @@
 			};
 			Neo4j_Command([command], callback, _sourceConfig);
 		}
+		*/
 		
 		function addValueToList(listElementId, col1, col2, col3)
 		{
@@ -1581,8 +1706,9 @@
 
 		}		
 		
-		function Neo4jCreateEntity(_sourceConfig)
+		function Neo4jCreateEntity()
 		{
+			var _sourceConfig = currentTheme.sourceConfig;
 			var entityName = document.getElementById('new.entity.name').value;
 			if (!entityName || entityName == ''){alert('Save failed!\nNo entity name specified.'); return;}
 			var propIndex = 0;
@@ -1608,9 +1734,11 @@
 		}
 		
 		
-		function Neo4jUpdateEntity(nodeID, _sourceConfig)
+		function Neo4jUpdateEntity(nodeID)
 		{
 			if (!nodeID){nodeID = selectedNodeID;}
+			var node = GRAPH.getNode(nodeID);
+			var _sourceConfig = node.sourceConfig;
 			var entityName = document.getElementById('new.entity.name').value;
 			if (!entityName || entityName == ''){alert('Save failed!\nNo entity name specified.'); return;}
 			var propIndex = 0;
@@ -1637,6 +1765,11 @@
 		
 		function Neo4jCreateRelation(nodeID1, nodeID2, planOnly, _sourceConfig)
 		{
+			var node1 = GRAPH.getNode(nodeID1);
+			var node2 = GRAPH.getNode(nodeID2);
+			if (node1.sourceConfig.prefix != node2.sourceConfig.prefix){
+				alert('Save failed!\nYou cannot relate nodes from different sources.'); return;
+			} 
 			var relationName = document.getElementById('new.relation.name').value;
 			if (!relationName || relationName == ''){alert('Save failed!\nNo relation name specified.'); return;}
 			var propIndex = 0;
@@ -1654,16 +1787,14 @@
 			}
 			if (propList != '') {propList = '{' + propList + '}';}
 
-			if (!planOnly)
-			{
+			if (!planOnly){
 				var callback = function(nodesResult, sourceConfig){
 					Neo4jFetchRelation(nodeID1, nodeID2, sourceConfig);
 				}
 				var command = 'MATCH (n) WHERE ID(n) = ' + getNeoId(nodeID1) + ' MATCH (m) WHERE ID(m) = '+ getNeoId(nodeID2) + ' CREATE (n)-[r:'+ relationName + propList +']->(m) RETURN id(startnode(r)), labels(startnode(r)), startnode(r) , id(r), type(r), r, id(endnode(r)), labels(endnode(r)), endnode(r)'
 				Neo4j_Command([command], callback, _sourceConfig);
 			}
-			else
-			{
+			else{
 				addPlannedLink(nodeID1, nodeID2, relationName, propList)
 			}
 		}
@@ -1701,7 +1832,7 @@
 					//	layout.setNodePosition(row[I_N_ID], pos.x, pos.y);
 					//}
 					//Node M...
-					var datM = new datax;
+					var datM = new datax();
 					datM.id =_sourceConfig.prefix + row[I_M_ID];
 					if (row[I_M_LABELS]){datM.labels = row[I_M_LABELS];}
 					if (row[I_M_PROPS]){datM.properties = new neoPropertyList(row[I_M_PROPS]);}
@@ -1709,11 +1840,11 @@
 					if (toNode){newNodes.push(toNode);}
 					
 					//link R...
-					var linkdata = new datay();
-					linkdata.fromNodeID = datN.id;
-					linkdata.toNodeID = datM.id;
-					linkdata.id = _sourceConfig.prefix + row[I_R_ID];
-					linkdata.name = row[I_R_LABELS];
+					var linkdata = new datay(datN.id, datM.id, _sourceConfig.prefix + row[I_R_ID], row[I_R_LABELS], _sourceConfig);
+					//linkdata.fromNodeID = datN.id;
+					//linkdata.toNodeID = datM.id;
+					//linkdata.id = _sourceConfig.prefix + row[I_R_ID];
+					//linkdata.name = row[I_R_LABELS];
 					linkdata.properties = new neoPropertyList(row[I_R_PROPS]);
 					var link = addDataLink(datN.id, datM.id, linkdata, _sourceConfig);
 				}
@@ -1732,7 +1863,7 @@
 					var I_N_LABELS = 1;
 					var I_N_PROPS = 2;
 					//Node N...
-					var dat = new datax;
+					var dat = new datax();
 					dat.id =_sourceConfig.prefix +row[I_N_ID];
 					if (row[I_N_LABELS]){dat.labels = row[I_N_LABELS];}
 					if (row[I_N_PROPS]){dat.properties = new neoPropertyList(row[I_N_PROPS]);}
@@ -1754,11 +1885,11 @@
 					var I_R_TYPE = 3;
 					var I_R_PROPS = 4;
 					//Node N...
-					var dat = new datay;
-					dat.fromNodeID = _sourceConfig.prefix + row[I_N_ID];
-					dat.toNodeID = _sourceConfig.prefix + row[I_M_ID];
-					dat.id = _sourceConfig.prefix + row[I_R_ID];
-					if (row[I_R_TYPE]){dat.name = row[I_R_TYPE];}
+					var dat = new datay(_sourceConfig.prefix + row[I_N_ID], _sourceConfig.prefix + row[I_M_ID], _sourceConfig.prefix + row[I_R_ID], row[I_R_TYPE], _sourceConfig);
+					//dat.fromNodeID = _sourceConfig.prefix + row[I_N_ID];
+					//dat.toNodeID = _sourceConfig.prefix + row[I_M_ID];
+					//dat.id = _sourceConfig.prefix + row[I_R_ID];
+					//if (row[I_R_TYPE]){dat.name = row[I_R_TYPE];}
 					if (row[I_R_PROPS]){dat.properties = new neoPropertyList(row[I_R_PROPS]);}
 					var node = addDataLink(dat.fromNodeID, dat.toNodeID, dat, _sourceConfig);
 				}
@@ -2255,12 +2386,9 @@
 
 //AJAX CALLS
 		
-		
 		function Neo4j_Command(statements, successCallback, _sourceConfig, failCallback)
 		{
 			var sourceConfig = _sourceConfig ? _sourceConfig : currentTheme.sourceConfig;
-			//_connection = currentTheme.sourceConfig.neo4jconnection
-			//if (_sourceConfig){_connection = _sourceConfig.neo4jconnection;}
 			var body = new neo_APIcall(); 
 			statements.forEach(function(statement){
 				body.statements.push(new neo_Statement(statement));
@@ -2347,13 +2475,23 @@
 			Neo4j_Command([command], callback, _sourceConfig);
 		}
 
-		function Neo4jGetNodesByLabel(byLabel, _sourceConfig)
+		function getConfigByPrefix(configPrefix)
 		{
+			for (var i = 0; i < masterConfigs.length; i++){
+				if (masterConfigs[i].prefix == configPrefix){
+					return masterConfigs[i];
+				}
+			}
+		}
+		
+		function Neo4jGetNodesByLabel(byLabel, sourceConfigPrefix)
+		{
+			var _sourceConfig = getConfigByPrefix(sourceConfigPrefix)
 			var callback = function (nodesResult, sourceConfig) {
 				addSingleNodesFromResults(nodesResult, sourceConfig);
 			}
 			var matchPattern = 'n';
-			if (byLabel) {matchPattern += ":" + byLabel;}
+			if (byLabel && byLabel != '') {matchPattern += ":" + byLabel;}
 			var command = 'MATCH ('+matchPattern+') RETURN id(n), labels(n), (n)';
 			Neo4j_Command([command], callback, _sourceConfig);
 		}
@@ -2511,7 +2649,6 @@
 					var boxWidth = link.data.UI.subTextUI.getBBox().width;
 					while (link.data.UI.subTextUI.children[i]){
 						$(link.data.UI.subTextUI.children[i]).attr('x', -boxWidth/2);
-						console.log(link.data.UI.subTextUI.children[i]);
 						i++;
 					}
 				}
@@ -2719,13 +2856,14 @@
 		function Neo4jGetAllLabels(_sourceConfig)
 		{
 			//var command = "match (n) return distinct labels(n)";
-			var command = "match (n) return labels(n), count(labels(n))";
 			var callback = function(data, sourceConfig){
-				
 				data.results[0].data.forEach(function (dataobject){
 					addDataLabel(dataobject.row[0][0], dataobject.row[1], sourceConfig);
 				});
+				refreshLabelSelectors();
 			};
+			
+			var command = "match (n) return labels(n), count(labels(n))";
 			Neo4j_Command([command], callback, _sourceConfig);
 		}
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2753,7 +2891,7 @@
 			var processingElement = document.getElementById('nodeDetails');
 			node.data.properties.forEach(function(property, index){
 				html += '<tr>'
-				var button_onclick = 'showOnNode(' + node.id + ', \'' + property.value + '\')';
+				var button_onclick = 'showOnNode(\'' + node.id + '\', \'' + property.value + '\')';
 				html += '<td><button class="fortext tooltip" onclick="'+button_onclick+'">O<div class="tooltiptext">display in node</div></button></td><td> <a class="dataNameLabel">' + property.key + '</a></td><td><a class="dataValueLabel"> ' + property.value + '</a></td>';
 				html += '</tr>'
 			});
@@ -2765,6 +2903,13 @@
 			{
 				updateElement.value = node.data.labels[0];
 			}
+			//node.data.properties.forEach(function(property, index){
+			//	html += '<tr>'
+			//	var button_onclick = 'showOnNode(' + node.id + ', \'' + property.value + '\')';
+			//	html += '<td><button class="fortext tooltip" onclick="'+button_onclick+'">O<div class="tooltiptext">display in node</div></button></td><td> <a class="dataNameLabel">' + property.key + '</a></td><td><a class="dataValueLabel"> ' + property.value + '</a></td>';
+			//	html += '</tr>'
+			//});
+			
 		}
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 		function showLinkDetails(link)
@@ -2931,7 +3076,6 @@
 				if (currentTheme.sourceConfig.displaySettings.loadNodePopouts){
 					if (!node.data.UI.popoutBodyUI){loadNodePopout(node);}
 					if(node.data.UI.popoutTextUI){
-						console.log('showing text');
 						node.data.UI.popoutTextUI.attr('class','showtext');
 					}
 					
@@ -2940,20 +3084,17 @@
 		}
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 		function uncheckNode(node){
-			//var checkednodeUI = graphics.getNodeUI(nodex.id);
 
 			if(node.data.UI.checkUI){
 				node.data.UI.checkUI.remove();
 				node.data.UI.checkUI = undefined;
 			}
-			//if(node.data.UI.fullUI){node.data.UI.bodyUI.attr('stroke','transparent');}
 			if (currentTheme.sourceConfig.displaySettings.loadNodePopouts){
 				if(node.data.UI.popoutTextUI){node.data.UI.popoutTextUI.attr('class','slidetext');}
 			}
 		}
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 		function highlightSelectedNode(nodeId) {
-		   //var nodeUI;
 		   
 		   if (selectedNodeID != ''){
 				if (nodeId == selectedNodeID) {return;} //...we've re-clicked the same node
@@ -2972,9 +3113,7 @@
 						unHighlightLink(link,false);
 					});
 				}
-				//nodeUI = graphics.getNodeUI(selectedNodeID);
-				//if(selectedNode.data.UI.focusUI){selectedNode.data.UI.focusUI.remove();}
-				//if(selectedNode.data.UI.focusUI){selectedNode.data.UI.focusUI.attr('stroke','transparent');}		   
+   
 			   if (bRelate==true)
 			   {
 					if (nodeId != selectedNodeID){
@@ -2992,84 +3131,33 @@
 			   }
 			   
 		   }
-		   //nodeUI = graphics.getNodeUI(nodeId);
 		   var node = GRAPH.getNode(nodeId);
 		   if (interactionOptions.checkNodes){
 				checkNode(node);
 		   }
-		   else{ //not checking nodes...
+		   else{ //...not checking nodes...
 			checkedNodes.forEach(function(nodex){
 				uncheckNode(nodex);
 			});
 			checkedNodes = [];
 		   }
 		   
-		   //if (node.data.UI.focusUI){node.data.UI.focusUI.attr('stroke','red');}
-			//var relevantLinks = node.data.toLinks.concat(node.data.fromLinks);
 			//Display relationship details...
 			node.data.toLinks.forEach(function(l){highlightLink(l,true)});
 			node.data.fromLinks.forEach(function(l){highlightLink(l,true)});
-			
-			/*relevantLinks.forEach(function(link){		   	
-				link.data.UI.nameTextUI = CommonUI.linkName.cloneNode();
-				link.data.UI.nameTextUI.innerHTML = link.data.name;
-				if(link.data.UI.midMarkerUI) {link.data.UI.midMarkerUI.append(link.data.UI.nameTextUI);}
-				link.data.UI.subTextUI = CommonUI.linkProps.cloneNode();
-				link.data.UI.subTextUI.innerHTML = propertyListToSvgList(link.data.properties, '<tspan x="0" dy="1.2em">', '</tspan>');
-				if(link.data.UI.midMarkerUI) {link.data.UI.midMarkerUI.append(link.data.UI.subTextUI);}
-			});*/
 
-			//selectedNode.data.UI.focusUI = 
 			selectedNodeID = nodeId;
 			selectedNodeData = node.data;
 			selectedNode = node;
-			//selectedNodeUI = nodeUI;
-			//selectedNode.data.UI.focusUI = ;
-			//selectedNode.data.UI.fullUI.append(CommonUI.focusUI);
-			//selectedNode.data.UI.fullUI.before(CommonUI.focusUI);
 			selectedNode.data.UI.fullUI.insertBefore(CommonUI.focusUI, selectedNode.data.UI.bodyUI);
 			selectedNode.data.UI.focusUI = CommonUI.focusUI
 				.attr('r', node.data.nodeSize+ node.data.nodeSize/3)//...for circle
 				.attr('stroke-width',node.data.nodeSize/5);
-			
-			//jed
-			//Show popout info...
-			//CommonUI.popoutInfoUI
-				//.attr('x', node.data.nodeSize/2)//...for circle
-				//.attr('stroke-width',node.data.nodeSize/5);
-			
-			//var boxheight = Number(CommonUI.popoutTextUI.getBBox().height + 20);
-			//var boxwidth = Number(CommonUI.popoutTextUI.getBBox().width + 30);
-			//console.log(boxwidth + ' ' + boxheight);
-			
-			//CommonUI.popoutBodyUI.attr('height',boxheight);
-			//CommonUI.popoutBodyUI.attr('x',node.data.nodeSize + 10);
-			//CommonUI.popoutBodyUI.attr('x',node.data.nodeSize + 10);
-			//CommonUI.popoutBodyUI.attr('height',20);
-			//CommonUI.popoutBodyUI.attr('width',100);
-			//CommonUI.popoutBodyUI.attr('class','hideNodePopoutBox');
-			//CommonUI.popoutTextUI.attr('class','hideNodePopoutText');
-			//CommonUI.popoutInfoUI.attr('style','width:'+boxwidth + 'px;');
-		
+
 			if (!node.data.UI.popoutBodyUI)
 			{
 				loadNodePopout(node);
 			}
-			//node.data.UI.popoutInfoUI = CommonUI.popoutInfoUI.cloneNode(true);
-			//node.data.UI.fullUI.append(node.data.UI.popoutInfoUI);
-			//node.data.UI.popoutBodyUI= node.data.UI.popoutInfoUI.children[0];
-			//node.data.UI.popoutTextUI= node.data.UI.popoutInfoUI.children[1];
-		
-			//$(node.data.UI.popoutInfoUI.children[0]).attr( "hideNodePopoutBox" );
-			//node.data.UI.popoutBodyUI.attr("width", 50 );
-			//node.data.UI.popoutBodyUI.attr("width", 100);
-			//node.data.UI.popoutBodyUI.attr("class", "popoutbox" );
-			
-			//console.log(CommonUI.popoutBodyUI);
-			
-			//node.data.UI.popoutInfoUI.children[0].class('showNodePopoutBox');
-			//node.data.UI.popoutInfoUI.children[1].attr('class','showNodePopout');
-			
 			showNodeDetails(node);	
 
 			//show sub nodes...
@@ -3082,11 +3170,7 @@
 				if (diffCount > 0) {
 					addSubNode(node, 'subfrom' + node.id, '#99ccff', diffCount);
 				}
-				
 			};
-		   
-		   
-		   
 		}
 
 		function loadNodePopout(node)
@@ -3238,7 +3322,7 @@
                         .attr('height', 0)
 						.attr('fill','#141414')
 						.attr('width','20%')
-						//jed
+
                     if (!cnf.opaque) {popoutBodyUI.attr('fill-opacity',0.3);}
 					*/
 					
@@ -4197,6 +4281,7 @@
 			cursor:pointer;
 		}
 		  
+		  
 		  #labelSelectorPanel {
 			width:130px;
 			//margin-top:5px;
@@ -4215,7 +4300,16 @@
 			//overflow-y: scroll;
 		  }
 		  
-		  
+		  [draggable] {
+			  -moz-user-select: none;
+			  -khtml-user-select: none;
+			  -webkit-user-select: none;
+			  user-select: none;
+			  /* Required to make elements draggable in old WebKit */
+			  -khtml-user-drag: element;
+			  -webkit-user-drag: element;
+			}
+
 		  .toolPanel {
 			width:200px;
 			margin:5px;
@@ -4227,19 +4321,18 @@
 			color: deepskyblue;
 			background-color:#1a1a1a;
 			border-radius:10px;
-			//background-opacity:0.8;
 			font-family:"Palatino Linotype", "Book Antiqua", Palatino, serif;
-			//font-family: Arial, Helvetica, sans-serif;
-			//font-family: Verdana;
-			//font-family:"Arial Black", Gadget, sans-serif;
 			font-size: 12px;
-			//font-weight: bold;
-			//font-family:"Lucida Console", Monaco, monospace;
 			letter-spacing: 0px;
 			opacity:0.9;
+			//font-family: Arial, Helvetica, sans-serif;
+			//font-family: Verdana;
+			//font-family:"Arial Black", Gadget, sans-serif;			
+			//font-weight: bold;
+			//font-family:"Lucida Console", Monaco, monospace;
 		  }
-		  .clearfix {
 
+		  .clearfix {
 		  }
 		  .panelheader {
 			margin:0px;
@@ -4251,7 +4344,7 @@
 			float:top;
 			letter-spacing: 1px;
 		  }
-		  .dataNameLabel{
+			.dataNameLabel{
 				color: #ff6600;
 			}
 			.dataValueLabel{
@@ -4263,27 +4356,57 @@
 				overflow-x: hidden;
 				max-height: 200px;
 			}
-		  
+
 		  #leftColumn {
 			left:10px;
+			top:50px;
 			width:250px;
 			margin:0px;
 			padding:0px;
 			border-width:0px;
-			max-height: 100%;
+			max-height: 92%;
 			overflow: auto;
 			position: fixed;
 		  }
 		  
 		  #rightColumn {
+			top:50px;
 			right:0px;
 			width:230px;
 			margin:0px;
 			padding:0px;
 			border-width:0px;
 			overflow: auto;
-			max-height: 100%;
+			max-height: 92%;
 			position: fixed;
+		  }
+		  
+		  #noColumn {
+			visibility: hidden;
+		  }
+		  
+		  #topBar {
+			top:5px;
+			//left:20px;
+			right: 100px;
+			height:27px;
+			margin-right:15px;
+			margin-left:10px;
+			padding:5px;
+			border-style:solid;
+			border-width:2px;
+			border-color:#cccccc;
+			color: deepskyblue;
+			background-color:#a6a6a6;
+			border-radius:5px;
+			font-family:"Palatino Linotype", "Book Antiqua", Palatino, serif;
+			font-size: 12px;
+			letter-spacing: 0px;
+			opacity:0.7;
+		  }
+		  .over {
+			background-color:red;
+			border: 2px dashed #000;
 		  }
 		  
 		  #graphPanel {
@@ -4319,6 +4442,17 @@ button {
 button:hover {
     background-color: #00a3cc; 
     color: white;
+}
+.toolPanelIcon{
+	background-color: #4d4d4d; 
+	text-align: center;
+	color: #f2f2f2;
+	margin: 0px 3px;
+	height: 25px;
+	width: 25px;
+	padding: 2px 2px 2px 2px;
+	border-radius: 3px;
+	right: 0px;
 }
 .fortext {
 	text-align: center;
@@ -4512,6 +4646,57 @@ hr {
 	border-color:#262626; 
 	margin:0px;
 }
+
+#slider {
+    //position: absolute;
+    width: 100px;
+    height: 100px;
+    //background: blue;
+    //transform: translateX(-100%);
+    //-webkit-transform: translateX(-100%);
+	transform: scaleY(0);
+    -webkit-transform: scaleY(0);
+	
+}
+
+
+.slide-in {
+    animation: slide-in 0.5s forwards;
+    -webkit-animation: slide-in 0.5s forwards;
+}
+
+.slide-out {
+    animation: slide-out 0.5s forwards;
+    -webkit-animation: slide-out 0.5s forwards;
+}
+    
+@keyframes slide-in {
+	100% { transform: scaleY(0);}
+	
+    //100% { transform: translateX(0%); }
+}
+
+@-webkit-keyframes slide-in {
+	100% { -webkit-transform: scaleY(0);}
+	
+    //100% { -webkit-transform: translateX(0%); }
+}
+    
+@keyframes slide-out {
+    0% { transform: scaleY(0);}
+	100% { transform: scaleY(1);}
+	
+	//0% { transform: translateX(0%); }
+    //100% { transform: translateX(-100%); }
+}
+
+@-webkit-keyframes slide-out {
+	0% { -webkit-transform: scaleY(0);}
+	100% { -webkit-transform: scaleY(1);}
+	
+    //0% { -webkit-transform: translateX(0%); }
+    //100% { -webkit-transform: translateX(-100%); }
+}
 		
     </style>
 </head>
@@ -4525,32 +4710,55 @@ hr {
 		<div id='graphContainer'></div>
 	</div>
 	
+	<div id='topBar'>
+		<button class='toolPanelIcon'>1</button>
+		<button class='toolPanelIcon'>2</button>
+		<button class='toolPanelIcon'>3</button>
+	</div>
+	
 	<div id='leftColumn'>
-		<div class="labelSelectorDisplay toolPanel">
+	</div>
+	
+	
+	<div id='rightColumn'>
+	</div>
+	
+	<!--div id="nodeOptions">
+		<button onclick='relateSelectedToNode()'>Relate entity</button>
+		<button onclick='deleteNode()'>Delete entity</button>
+	</div-->
+
+	
+
+</body>
+
+	<div id='noColumn'>
+	
+		<div class="labelSelectorDisplay toolPanel" id='panel.labelselectors'>
 			<table id="selectorLabels" class="label">
 			</table>
 		</div>
 		
-		<div class='toolPanel'>
+		<div class='toolPanel' id='panel.config'>
 			Configuration: <select onchange="changeConfig()" id="configSelector">
 			</select>
 		</div>
 		
-		<div class='toolPanel'>
+		<div class='toolPanel' id='panel.nodedetails'>
 			<div id='selectedNode'></div>
 			<hr>
 			<div id='nodeDetails'>
 			</div>
 		</div>
 		
-		<div class='toolPanel'>
+		<div class='toolPanel' id='panel.linkdetails'>
 			<div id='selectedLink'></div>
 			<hr>
 			<div id='linkDetails'>
 			</div>
 		</div>
 		
-		<div class='toolPanel'>		
+		<div class='toolPanel' id='panel.simplequery'>		
 
 			<div class="panelheader">Build Query:</div> 
 			<table>
@@ -4565,23 +4773,26 @@ hr {
 				<td>where:</td>
 				<td>
 				<select onchange="Neo4jQbuilder('qbuilder.from.property')" id="qbuilder.from.property"></select>
+				<!--input onchange="Neo4jQbuilder('qbuilder.from.property')" type="text" name="" list="qbuilder.from.property">
+					<datalist id="qbuilder.from.property"></datalist-->
+					
 				</td>
 			</tr>
 			<tr>
 				<td>is:</td>
 				<td>
 					<!--select onchange="qbuilder('qbuilder.from.value')" id="qbuilder.from.value"></select-->
-					<input onchange="Neo4jQbuilder('qbuilder.from.value')" id="qbuilder.from.value" type="text" name="" list="qbuilder.from.selectvalue">
+					<input onfocus="Neo4jQbuilder_ClearValue('qbuilder.from.value')" onchange="Neo4jQbuilder('qbuilder.from.value')" id="qbuilder.from.value" type="text" name="" list="qbuilder.from.selectvalue">
 					<datalist id="qbuilder.from.selectvalue"></datalist>
 					
 				</td>
 			</tr>
 			</table>
 			<button onclick='ButtonSimpleSearch()'>Search</button>
-			<button onclick='Neo4jQueryRecursiveSearch()'>Tree Search</button>
+			<!--button onclick='Neo4jQueryRecursiveSearch()'>Tree Search</button-->
 		</div>
 		
-		<div class='toolPanel'>		
+		<div class='toolPanel' id='panel.functions'>		
 			<div class="panelheader">Functions:</div>
 			<button onclick='createJsonFromSelectedNodes()'>Create Json</button>
 			<button class="popup" >Monitor
@@ -4596,7 +4807,16 @@ hr {
 			
 		</div>
 		
-		<div class='toolPanel labelSelectorDisplay' id='panelViewOptions'>
+		<!--div id="slider" draggable="true" class="toolPanel slide-in">
+			<ul>
+				<li>Lorem</li>
+				<li>Ipsum</li>
+				<li>Dolor</li>
+			</ul>
+		</div-->
+		<!--button id="toggle" style="position:absolute; top: 120px;">Toggle</button-->
+		
+		<div class='toolPanel labelSelectorDisplay' draggable="true" id='panel.monitoring'>
 			<div id='newNode'>
 			  <div class="panelheader">Monitored Nodes</div>
 			  <table id='nodelist.monitored'>
@@ -4604,12 +4824,7 @@ hr {
 			</div>
 		</div>
 		
-	</div>
-	
-	
-	<div id='rightColumn'>
-
-		<div class='toolPanel'>		
+		<div class='toolPanel' id='panel.entity.create'>		
 			<div class="panelheader">Entity Management</div> 
 			<table>
 			<tr>
@@ -4633,7 +4848,7 @@ hr {
 		</div>
 
 		
-		<div class='toolPanel'>		
+		<div class='toolPanel' id='panel.relationship.create'>		
 			<div class="panelheader">Create Relationship</div> 
 			<table>
 			<tr>
@@ -4655,7 +4870,7 @@ hr {
 			<button onclick='planRelateSelectedToNode()'>Plan Relation To...</button>
 		</div>
 
-		<div class='toolPanel'>
+		<div class='toolPanel' id='panel.bulkactions'>
 			<div> 
 				<div class="panelheader">Apply to ALL</div>
 				<button class="popup" >Check
@@ -4670,7 +4885,7 @@ hr {
 			</div>
 		</div>
 
-		<div class='toolPanel' id='panelAppearance'>
+		<div class='toolPanel' id='panel.appearance'>
 			<div class="panelheader">Appearance</div>
 			<button class="popup">Node
 				<div class="popuptext">
@@ -4710,14 +4925,14 @@ hr {
 			</div>
 		</div-->
 		
-		<div class='toolPanel' id='panelSelectionOptions'>
+		<div class='toolPanel' id='panel.selection'>
 			<div id='newNode'>
 			  <div class="panelheader">Selection Options:</div>
 			  <input class="check" id="vo.ch" onclick="updateInteractionOptions()" type="checkbox" name="descendants" value=""> Multi Select<br>
 			</div>
 		</div>
 		
-		<div class='toolPanel' id='panelViewOptions'>
+		<div class='toolPanel' id='panel.highlight'>
 			<div id='newNode'>
 			  <div class="panelheader">View Options: (on entity hover)</div>
 			  <form action="">
@@ -4728,7 +4943,7 @@ hr {
 			</div>
 		</div>
 	
-		<div class='toolPanel' id='panelViewOptions'>
+		<div class='toolPanel' id='panel.navigation'>
 			<div id='newNode'>
 			  <div class="panelheader">Navigation: (on entity double-click)</div>
 			  <form action="">
@@ -4738,19 +4953,7 @@ hr {
 			  </form>
 			</div>
 		</div>
-		
-
 	</div>
-	
-	<div id="nodeOptions">
-		<button onclick='relateSelectedToNode()'>Relate entity</button>
-		<button onclick='deleteNode()'>Delete entity</button>
-	</div>
-
-	
-
-</body>
-
 	<dialog class='dialog' id="myDialog">
 		<textarea id="myDialogText"></textarea>
 		<button onclick="closeDialog('myDialog')">Close</button>

@@ -7,9 +7,28 @@ configManager.configs.push({
 		username:"neo4j",
 		password:"Password@123456"
 	},
-	
+	startupOptions:{
+		//defaultConnection:"local", //used unless source is otherwise specified.
+		startupSearch:[
+		  /*{label:"SOME_LABEL", source:"NEO4J_CONNECTION, properties:[{key:"KEYNAME", value:"VALUE"}]"*/
+			{label:"Person", properties:[{key:"name", value:"Amy"}] }
+			//,{"label":"ROOT"}
+			//,{"label":"host"}
+			//,{"label":"service"}
+			//,{"label":"ipv4network"}
+			//,{"label":"site"}
+		],
+			nodeDisplayBody: [
+			/*{label:"SOME_LABEL", "image":"IMAGE_URL"??none, "color":"HEXVALUE"??auto, "size":30, "labelPos":"above/under/left/right"??center},*/
+			//{label:"Car", color:"#002533"}
+		],
+	},
+
+	viewOptions:{
+		prefetchLabelSelectors:true
+	},
 	displaySettings:{
-			
+			selectorColor:"#0066cc",
 			graphBackground:"linear-gradient(#ffcc99, #ffe6cc, #ffcc99)", //"linear-gradient(#002533, #00384d)", //"#0e1a25",
 			
 			entityShape:"circle",
@@ -18,8 +37,8 @@ configManager.configs.push({
 			entityBorderColor:null, /*null=auto-color*/
 			entityOpacity: 1,
 			
-			linkColor:"#ffe6cc", /*...html/hex color*/
-			linkMainTextColor:"#d9d9d9",
+			linkColor:"#333333", /*...html/hex color*/
+			linkMainTextColor:"#333333",
 			linkSubTextColor:"#ffa64d",
 			linkThickness: 3,
 			
@@ -29,7 +48,7 @@ configManager.configs.push({
 			/*effects...*/
 			haze:false, /*...outer node haze*/
 			highlightHaze:true, /*...outer node haze*/
-			shadow:true, /*...outer node shadow*/
+			shadow:false, /*...outer node shadow*/
 			glow:false, /*...outer node glow*/
 			rounded:false, /*...inner node shadow*/
 			

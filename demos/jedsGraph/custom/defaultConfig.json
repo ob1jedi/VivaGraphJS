@@ -9,22 +9,32 @@ configManager.configs.push({
 	},
 	startupOptions:{
 		//defaultConnection:"local", //used unless source is otherwise specified.
-		startupSearch:[],
-		startupQueries:[],
-		nodeDisplayValues:[],
-		nodeDisplayBody: [],
-		linkDisplayValues:[]
+		 startupSearch:[]
+		,startupQueries:[]
+		,nodeDisplayValues:[]
+		,nodeDisplayBody: []
+		,linkDisplayValues:[]
 	},
 	viewOptions:{
-		prefetchCounts:true,
+		prefetchLabelSelectors:false,
+		prefetchCounts:false,
 		panels:[
-			{name:"panel.appearance", parent:"leftColumn", visible:true}
+			//{name:"PANEL.NAME", parent:""/"leftColumn"/"rightColumn"/"topBar", visible:BOOL}
+			 {name:"panel.labelselectors", parent:"leftColumn", visible:true}
+			,{name:"panel.config", parent:"leftColumn", visible:true}
+			,{name:"panel.nodedetails", parent:"leftColumn", visible:true}
+			,{name:"panel.linkdetails", parent:"leftColumn", visible:true}
+			,{name:"panel.simplequery", parent:"leftColumn", visible:true}
+			,{name:"panel.functions", parent:"leftColumn", visible:true}
+			,{name:"panel.monitoring", parent:"leftColumn", visible:true}
+			
+			,{name:"panel.entity.create", parent:"leftColumn", visible:true}
+			,{name:"panel.relationship.create", parent:"leftColumn", visible:true}
 			,{name:"panel.bulkactions", parent:"leftColumn", visible:true}
+			,{name:"panel.appearance", parent:"leftColumn", visible:true}
 			,{name:"panel.selection", parent:"leftColumn", visible:true}
 			,{name:"panel.highlight", parent:"leftColumn", visible:true}
 			,{name:"panel.navigation", parent:"leftColumn", visible:true}
-			,{name:"", parent:"", visible:true}
-
 		],
 		subnodes:{relations:"ifany"},
 		nodeSizing:"relationCount" /*relationCount/outRelationCount/inRelationCount(increase node size based on relationships)*/

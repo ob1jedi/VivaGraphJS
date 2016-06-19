@@ -1,7 +1,1 @@
-var configManager = {
-	configs:[], /*...will be populated by the HTML loads*/
-	configOptions:[
-		/*{name:"config name", selectable:"User can select|opt", mainDefault:"used as default|opt"}*/
-		{name:"default", selectable:true, mainDefault:true}
-	]
-}
+var configManager = {configs:[]} /*...will be populated by the HTML loads*/
