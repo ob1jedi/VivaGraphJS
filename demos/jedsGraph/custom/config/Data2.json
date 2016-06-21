@@ -1,6 +1,6 @@
 configManager.configs.push({
-	configName:"Schema", /*mandatory field, must be unique among other configs*/
-	prefix:"SCH", /*mandatory field, must be unique among other configs*/
+	configName:"data2", /*mandatory field, must be unique among other configs*/
+	prefix:"DT2", /*mandatory field, must be unique among other configs*/
 	neo4jconnection:{	
 		sourceName:"schema",
 		server:"http://localhost:7474",
@@ -11,7 +11,7 @@ configManager.configs.push({
 		//defaultConnection:"local", //used unless source is otherwise specified.
 		startupSearch:[
 		  /*{label:"SOME_LABEL", source:"NEO4J_CONNECTION, properties:[{key:"KEYNAME", value:"VALUE"}]"*/
-			{label:"Person", properties:[{key:"name", value:"Amy"}] }
+			//{label:"Person", properties:[{key:"name", value:"Amy"}] }
 			//,{"label":"ROOT"}
 			//,{"label":"host"}
 			//,{"label":"service"}
@@ -29,23 +29,25 @@ configManager.configs.push({
 	},
 	displaySettings:{
 			selectorColor:"#0066cc",
-			graphBackground:"linear-gradient(#ffcc99, #ffe6cc, #ffcc99)", //"linear-gradient(#002533, #00384d)", //"#0e1a25",
+			graphBackground:"linear-gradient(white, white)", //"linear-gradient(#002533, #00384d)", //"#0e1a25",
 			
 			entityShape:"circle",
-			entityRgbRange:{min:40,max:140},/*The 4bit rgb range from which label colors can be automatically generated.*/			
+			entityRgbRange:{min:150,max:200},/*The 4bit rgb range from which label colors can be automatically generated.*/			
 			entityLabelColor:"black",
-			entityBorderColor:null, /*null=auto-color*/
+			entityBorderColor:"black", /*null=auto-color*/
 			entityOpacity: 1,
 			
-			linkColor:"#333333", /*...html/hex color*/
-			linkMainTextColor:"#333333",
-			linkSubTextColor:"#ffa64d",
-			linkThickness: 3,
+			linkColor:"black", /*...html/hex color*/
+			linkMainTextColor:"black",
+			linkSubTextColor:"black",
+			linkThickness: 2,
+			linkOpacity:1,
 			
 			opaque:false,
 			labelSizing:"fontsize", /*choices: "hyphenate" (make labels shorter) "fontsize" (make the font size smaller) "" (no sizing, labels may extend past the boundaries of the node)*/
 			
 			/*effects...*/
+			
 			haze:false, /*...outer node haze*/
 			highlightHaze:true, /*...outer node haze*/
 			shadow:false, /*...outer node shadow*/

@@ -7,8 +7,8 @@
     <script type="text/javascript" src="deps/vivagraph.js"></script>
 	<script type="text/javascript" src="custom/configloader.json"></script>
 	<script type="text/javascript" src="custom/defaultConfig.json"></script>
-	<script type="text/javascript" src="custom/config/Schema.json"></script>
-	<script type="text/javascript" src="custom/config/Data.json"></script>
+	<script type="text/javascript" src="custom/config/Data1.json"></script>
+	<script type="text/javascript" src="custom/config/Data2.json"></script>
     <!--
     This example uses jQuery, but it's only for convenience of listenting
     to DOM events. The jQuery can be replaced with your favorite library.
@@ -340,6 +340,7 @@
 
 			//GET ALL LABELS>>
 			masterConfigs.forEach(function (cnf){
+				
 				if (cnf.viewOptions.prefetchLabelSelectors){
 					Neo4jGetAllLabels(cnf); //..get all entity names from the DB
 				}
@@ -466,14 +467,13 @@
 				//Update the config selector on the UI...
 				var selectorElement = document.getElementById("configSelector");
 				masterConfigs.forEach(function (cnf){
-					if (cnf.prefix != "DEF"){
-						selectorElement.innerHTML += '<option value="'+cnf.configName+'">' + cnf.configName + '</option>';
-					}
+					if (configManager.defaultConfig = cnf.prefix){DefaultConfig = cnf}
+					selectorElement.innerHTML += '<option value="'+cnf.configName+'">' + cnf.configName + '</option>';
 				});
 				
 				//setupUI();
 				
-				callback(masterConfigs[0]);	
+				callback(DefaultConfig);	
 				
 			});
 		}
@@ -1364,15 +1364,23 @@
 			
 			var allNodeLists = nodeList.concat(node.data.toNodes.concat(node.data.fromNodes));
 			var i = -1;
-			while (i++ < nodeList.length){if (nodeList[i].id == nodeID) {nodeList.splice(i, 1);}}
-			while (i++ < monitoredNodes.length){if (monitoredNodes[i].id == nodeID) {monitoredNodes.splice(i, 1);}}
-			while (i++ < checkedNodes.length){if (checkedNodes[i].id == nodeID) {checkedNodes.splice(i, 1);}}
+			//console.log(nodeList);
+			while (++i < nodeList.length){if (nodeList[i].id == nodeID) {nodeList.splice(i, 1);}}
+			var i = -1;
+			while (++i < monitoredNodes.length){if (monitoredNodes[i].id == nodeID) {monitoredNodes.splice(i, 1);}}
+			var i = -1;
+			while (++i < checkedNodes.length){if (checkedNodes[i].id == nodeID) {checkedNodes.splice(i, 1);}}
 			nodeList.forEach(function(node) {
-				while (i++ < node.data.toNodes.length){if (node.data.toNodes[i].id == nodeID) {node.data.toNodes.splice(i, 1);}}
-				while (i++ < node.data.fromNodes.length){if (node.data.fromNodes[i].id == nodeID) {node.data.fromNodes.splice(i, 1);}}
-				while (i++ < node.data.fromNodes.length){if (node.data.fromNodes[i].id == nodeID) {node.data.fromNodes.splice(i, 1);}}
-				while (i++ < node.data.toLinks.length){if (node.data.toLinks[i].toNodeID == nodeID) {node.data.toLinks.splice(i, 1);}}
-				while (i++ < node.data.fromLinks.length){if (node.data.fromLinks[i].fromNodeID == nodeID) {node.data.fromLinks.splice(i, 1);}}
+				var i = -1;
+				while (++i < node.data.toNodes.length){if (node.data.toNodes[i].id == nodeID) {node.data.toNodes.splice(i, 1);}}
+				var i = -1;
+				while (++i < node.data.fromNodes.length){if (node.data.fromNodes[i].id == nodeID) {node.data.fromNodes.splice(i, 1);}}
+				var i = -1;
+				while (++i < node.data.fromNodes.length){if (node.data.fromNodes[i].id == nodeID) {node.data.fromNodes.splice(i, 1);}}
+				var i = -1;
+				while (++i < node.data.toLinks.length){if (node.data.toLinks[i].toNodeID == nodeID) {node.data.toLinks.splice(i, 1);}}
+				var i = -1;
+				while (++i < node.data.fromLinks.length){if (node.data.fromLinks[i].fromNodeID == nodeID) {node.data.fromLinks.splice(i, 1);}}
 			});
 			
 			var relativeLinks = node.data.toLinks.concat(node.data.fromLinks);
@@ -1481,8 +1489,8 @@
 			//set display label...
 			nodeData.displayLabel = "";
 			nodeData.labels.forEach(function(label, index){
-				addDataLabel(label, undefined, nodeData.sourceConfig);
-				refreshLabelSelectors();
+				//addDataLabel(label, undefined, nodeData.sourceConfig);
+				//refreshLabelSelectors();
 				if (nodeData.displayLabel) {nodeData.displayLabel += ','}
 				if(!nodeData.displayLabel) {nodeData.displayLabel = '';}
 				if (nodeData.config.nodeDisplayValues.displayField){
@@ -1688,9 +1696,9 @@
 			
 			if (fromEntity && fromEntity != ''){fromEntity = ':' + fromEntity;}
 			var command = 'MATCH (n'+fromEntity + propertyBlock + ') RETURN id(n), labels(n), n';
+			
 			var callback = function(nodesResult, sourceConfig){
 				addSingleNodesFromResults(nodesResult, sourceConfig)
-				
 				//Recurse...
 				var command = 'MATCH (n'+fromEntity + propertyBlock+')-[r]-(m) RETURN id(startnode(r)), labels(startnode(r)), startnode(r) , id(r), type(r), r, id(endnode(r)), labels(endnode(r)), endnode(r)';
 				var callback2 = function(nodesResult, sourceConfig){addNodesFromResults(nodesResult, sourceConfig)};
@@ -2362,12 +2370,12 @@
 				//});
 				
 				//if (node.data.labels.indexOf(label.name) > -1){	
-				node.data.UI.fullUI.attr('fill-opacity',1);
-				node.data.UI.bodyUI.attr('fill-opacity',1);
+				node.data.UI.fullUI.attr('fill-opacity',node.data.sourceConfig.displaySettings.entityOpacity);
+				node.data.UI.bodyUI.attr('fill-opacity',node.data.sourceConfig.displaySettings.entityOpacity);
 				//}
 				if (label && node.data.labels.indexOf(label.name) == -1){
-					node.data.UI.fullUI.attr('fill-opacity',0.2)
-					node.data.UI.bodyUI.attr('fill-opacity',0.2);
+					node.data.UI.fullUI.attr('fill-opacity',node.data.sourceConfig.displaySettings.entityOpacity/ 5)
+					node.data.UI.bodyUI.attr('fill-opacity',node.data.sourceConfig.displaySettings.entityOpacity/ 5);
 					//fadedNodes.push(node);
 				}
 			});
@@ -2493,7 +2501,7 @@
 		function Neo4jGetRelationCounts(nodeId, callback, _sourceConfig)
 		{
 			command = 'MATCH (n)-[r]->(m) where id(n) = '+getNeoId(nodeId)+' RETURN count(n) UNION MATCH (n)<-[r]-(m) where id(n) = '+getNeoId(nodeId)+ ' RETURN count(n)'
-
+			
 			var callback2 = function(nodesResults, sourceConfig){
 				for (var i = 0; i < nodesResults.results.length; i++){	
 						var result = nodesResults.results[i];
@@ -3030,7 +3038,7 @@
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 		function checkLink(link){
 				showLinkData(link);
-				link.data.UI.pathUI.attr('stroke-width', 5);
+				link.data.UI.pathUI.attr('stroke-width', link.data.sourceConfig.displaySettings.linkThickness * 2);
 				link.data.UI.pathUI.attr('stroke', '#99ff33');
 				link.data.checked = true;
 				checkedLinks.push(link);
@@ -3038,7 +3046,7 @@
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 		function uncheckLink(link){
 				hideLinkData(link);
-				link.data.UI.pathUI.attr('stroke-width', 3);
+				link.data.UI.pathUI.attr('stroke-width', link.data.sourceConfig.displaySettings.linkThickness);
 				link.data.UI.pathUI.attr('stroke', link.data.color);
 				link.data.checked = false;
 				checkedLinks.map(function(l,index){if (l.data.id == link.data.id){checkedLinks.splice(index,1);}})
@@ -3060,14 +3068,14 @@
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 		function highlightLink(link) { //...for mouse-hover only
 			showLinkData(link);
-			link.data.UI.pathUI.attr('stroke-width', 5);
+			link.data.UI.pathUI.attr('stroke-width', link.data.sourceConfig.displaySettings.linkThickness * 2);
 			//link.data.UI.pathUI.attr('stroke', 'red');
 		}
 		//---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 		function unHighlightLink(link) { //...for mouse-hover only
 			if (!link.data.checked){
 				hideLinkData(link);
-				link.data.UI.pathUI.attr('stroke-width', 3);
+				link.data.UI.pathUI.attr('stroke-width', link.data.sourceConfig.displaySettings.linkThickness);
 			}
 			//link.data.UI.pathUI.attr('stroke', link.data.color);
 		}
@@ -3260,7 +3268,12 @@
 
             graphics = Viva.Graph.View.svgGraphics();
                 nodeSize = 24;
-				
+			
+			//var visDefs = '<filter id="hazeEffect" x="-1" y="-1" width="300%" height="300%"><feOffset result="offOut" in="FillPaint" dx="0" dy="0" /><feGaussianBlur result="blurOut" in="offOut" stdDeviation="10" /><feBlend in="SourceGraphic" in2="blurOut" mode="normal" /></filter>';
+			//visDefs += '<filter id="shadowEffect" x="-1" y="-1" width="300%" height="300%"><feOffset result="offOut" in="SourceAlpha" dx="20" dy="20" /><feGaussianBlur result="blurOut" in="offOut" stdDeviation="10" /><feBlend in="SourceGraphic" in2="blurOut" mode="normal" /></filter>';
+			//var defs = graphics.getSvgRoot().append('defs');
+			//defs.append(visDefs);
+					
 			
 			//add static-type elements
 			//var backgroundDataNode = new datax();
@@ -3319,9 +3332,10 @@
 							nodeBody.attr('x',-(node.data.nodeSize*3/2));
 							nodeBody.attr('y',-(node.data.nodeSize*2/2));
 						}
-						if (cnf.haze) {nodeBody.attr('filter','url(#hazeEffect)');} //haze
-						if (cnf.rounded) {nodeBody.attr('fill','url(#gradRound)');}
-						if (!cnf.opaque) {nodeBody.attr('fill-opacity',cnf.entityOpacity);}
+						if (cnf.haze == true) {nodeBody.attr('filter','url(#hazeEffect)');} //haze
+						if (cnf.glass == true) {nodeBody.attr('fill','url(#gradGlass)');}
+						if (cnf.rounded == true) {nodeBody.attr('fill','url(#gradRound)');}
+						if (!cnf.opaque == true) {nodeBody.attr('fill-opacity',cnf.entityOpacity);}
 					
 					nodeBodyImage = Viva.Graph.svg('image')
 						.attr('x', -node.data.nodeSize)
@@ -3330,8 +3344,8 @@
 						.attr('width', node.data.nodeSize * 2)
 						.attr('height', node.data.nodeSize * 2)
 						.link(nodeConfig.image?nodeConfig.image:'');
-						if (cnf.rounded) {nodeBodyImage.attr('fill','url(#gradRound)');}
-						if (!cnf.opaque) {nodeBodyImage.attr('fill-opacity',node.data.nodeOpacity);}
+						if (cnf.rounded == true) {nodeBodyImage.attr('fill','url(#gradRound)');}
+						if (!cnf.opaque == true) {nodeBodyImage.attr('fill-opacity',node.data.nodeOpacity);}
 						
 					//Text elements...
 					displayText = Viva.Graph.svg('text')
@@ -3342,6 +3356,7 @@
 						.attr('font-family','Arial, Helvetica, sans-serif')
 						.attr('font-size','20')
 						.text(node.data.displayLabel);
+						if (cnf.textHaze == true) {console.log('texthaze'); displayText.attr('filter','url(#darkHazeEffect)');} //haze
 						/*
 					popoutTextUI = Viva.Graph.svg('text')
 						.attr('class', 'slidetext')
@@ -3372,10 +3387,13 @@
 					var visDefs = '<defs>';
 					visDefs += '<filter id="hazeEffect" x="-1" y="-1" width="300%" height="300%"><feOffset result="offOut" in="FillPaint" dx="0" dy="0" /><feGaussianBlur result="blurOut" in="offOut" stdDeviation="10" /><feBlend in="SourceGraphic" in2="blurOut" mode="normal" /></filter>';
 					visDefs += '<filter id="shadowEffect" x="-1" y="-1" width="300%" height="300%"><feOffset result="offOut" in="SourceAlpha" dx="20" dy="20" /><feGaussianBlur result="blurOut" in="offOut" stdDeviation="10" /><feBlend in="SourceGraphic" in2="blurOut" mode="normal" /></filter>';
-					//visDefs += '<radialGradient id="gradGlow" cx="50%" cy="50%" r="50%" fx="50%" fy="50%"><stop offset="0%" style="stop-color:#ffffff; stop-opacity:1" /><stop offset="100%" style="stop-color:#66e0ff;stop-opacity:0" /></radialGradient>';
+					visDefs += '<linearGradient id="gradGlass" gradientUnits="userSpaceOnUse" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#606768" stop-opacity="0.3"/><stop offset="3%" stop-color="#bbbbbb" stop-opacity="0.3"/><stop offset="27%" stop-color="#bbbbbb" stop-opacity="0.3"/><stop offset="28%" stop-color="#000000" stop-opacity="0.3"/><stop offset="73%" stop-color="#000000" stop-opacity="0.3"/><stop offset="88%" stop-color="#4b5051" stop-opacity="0.3"/><stop offset="97%" stop-color="#000000" stop-opacity="0.3"/><stop offset="100%" stop-color="#000000" stop-opacity="0.3"/></linearGradient>';
+					//visDefs += '<linearGradient id="coloredGlass" gradientUnits="userSpaceOnUse" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#606768" stop-opacity="0.3"/><stop offset="3%" stop-color="#bbbbbb" stop-opacity="0.3"/><stop offset="27%" stop-color="#bbbbbb" stop-opacity="0.3"/><stop offset="28%" stop-color="#000000" stop-opacity="0.3"/><stop offset="73%" stop-color="#000000" stop-opacity="0.3"/><stop offset="88%" stop-color="#4b5051" stop-opacity="0.3"/><stop offset="97%" stop-color="#000000" stop-opacity="0.3"/><stop offset="100%" stop-color="#000000" stop-opacity="0.3"/></linearGradient>';
 					visDefs += '<radialGradient id="gradRound" cx="50%" cy="50%" r="50%" fx="50%" fy="50%"><stop offset="80%" style="stop-color:rgb('+node.data.nodeColorRGB.r+','+node.data.nodeColorRGB.g+','+node.data.nodeColorRGB.b+'); stop-opacity:1" /><stop offset="100%" style="stop-color:rgb('+(node.data.nodeColorRGB.r-100) +','+(node.data.nodeColorRGB.g-100)+','+(node.data.nodeColorRGB.b-100)+');stop-opacity:1" /></radialGradient>';
-					visDefs += '</defs>'; 
+					visDefs += '</defs>'; 				
 					ui.innerHTML = visDefs;
+					
+					
 					ui.attr('class', 'datanode')
 					
 					node.data.UI.fullUI = ui;
@@ -3580,9 +3598,9 @@
 						.attr('stroke-width',3)
 						.attr('stroke', cnf.entityBorderColor==null?node.data.nodeBorderColor:cnf.entityBorderColor)
 						//.attr('stroke-opacity',0.5);
-						if (cnf.haze) {nodeBody.attr('filter','url(#hazeEffect)');} //haze
-						if (cnf.rounded) {nodeBody.attr('fill','url(#gradRound)');}
-						if (!cnf.opaque) {nodeBody.attr('fill-opacity',node.data.nodeOpacity);}
+						if (cnf.haze == true) {nodeBody.attr('filter','url(#hazeEffect)');} //haze
+						if (cnf.rounded == true) {nodeBody.attr('fill','url(#gradRound)');}
+						if (!cnf.opaque == true) {nodeBody.attr('fill-opacity',node.data.nodeOpacity);}
 					
 					nodeBodyImage = Viva.Graph.svg('image')
 						.attr('x', -node.data.nodeSize)
@@ -3591,8 +3609,8 @@
 						.attr('width', node.data.nodeSize * 2)
 						.attr('height', node.data.nodeSize * 2)
 						.link(nodeConfig.image?nodeConfig.image:'');
-						if (cnf.rounded) {nodeBodyImage.attr('fill','url(#gradRound)');}
-						if (!cnf.opaque) {nodeBodyImage.attr('fill-opacity',node.data.nodeOpacity);}
+						if (cnf.rounded == true) {nodeBodyImage.attr('fill','url(#gradRound)');}
+						if (!cnf.opaque == true) {nodeBodyImage.attr('fill-opacity',node.data.nodeOpacity);}
 						
 					//Text elements...
 					displayText = Viva.Graph.svg('text')
@@ -3603,6 +3621,7 @@
 						.attr('font-family','Arial, Helvetica, sans-serif')
 						.attr('font-size','20')
 						.text(node.data.displayLabel);
+						
 						
 					popoutTextUI = Viva.Graph.svg('text')
 						.attr('class', 'slideText')
@@ -3622,7 +3641,7 @@
                         .attr('rx', node.data.nodeSize/4)
                         .attr('height', 0)
 						.attr('fill','#141414')
-                    if (!cnf.opaque) {popoutBodyUI.attr('fill-opacity',0.3);}
+                    if (!cnf.opaque == true) {popoutBodyUI.attr('fill-opacity',0.3);}
 					
 					
 					//var defs = graphics.getSvgRoot().append('defs');
@@ -3816,7 +3835,7 @@
 							.attr('stroke-width',0)
 							.attr('d', 'M 0 -0.7 L 2 0 L 0 0.7 z')
 							.attr('fill',link.data.color);
-							if (!link.data.sourceConfig.displaySettings.opaque) {endArrow.attr('opacity', 0.5);}
+							if (!link.data.sourceConfig.displaySettings.opaque) {endArrow.attr('opacity', link.data.sourceConfig.displaySettings.linkOpacity);}
 							//markerTraingle.append(markerArrow)
 						/*var markerLabel = Viva.Graph.svg('text')
 								.attr('class','markertextlabel')
@@ -3867,12 +3886,12 @@
 							   .attr('class','linkpath')
 							   .attr('id',linklabelId)
 							   .attr('stroke', link.data.color)
-							   .attr('stroke-width', '3')
+							   .attr('stroke-width', link.data.sourceConfig.displaySettings.linkThickness)
 							   .attr('marker-mid', 'url(#mid' + linklabelId + ')')
 							   //.attr('marker-end', 'url(#Triangle)')
 							   .attr('marker-end', 'url(#end' + linklabelId + ')')
 							   .attr("fill", 'transparent');
-							   if (!link.data.sourceConfig.displaySettings.opaque) {linkPath.attr('stroke-opacity', 0.5);}
+							   if (!link.data.sourceConfig.displaySettings.opaque) {linkPath.attr('stroke-opacity', link.data.sourceConfig.displaySettings.linkOpacity);}
 
 							   
 					var linkPoputText = Viva.Graph.svg('text')
@@ -3966,7 +3985,7 @@
 							   .attr('stroke', link.data.color)
 							   .attr('stroke-width', '1')
 							   .attr("fill", 'transparent');
-							   if (!link.data.sourceConfig.displaySettings.opaque) {linkPath.attr('stroke-opacity', 0.5);}
+							   if (!link.data.sourceConfig.displaySettings.opaque) {linkPath.attr('stroke-opacity', link.data.sourceConfig.displaySettings.linkOpacity);}
 
 					ui.append(linkPath);
 					link.data.UI.fullUI = ui;
@@ -3987,9 +4006,9 @@
 					var linkPath = Viva.Graph.svg('path')
 							   .attr('id',linklabelId)
 							   .attr('stroke', link.data.color)
-							   .attr('stroke-width', 5)
+							   .attr('stroke-width', link.sourceConfig.displaySettings.linkThickness)
 							   .attr("fill", 'transparent');
-							   if (!link.data.sourceConfig.displaySettings.opaque) {linkPath.attr('stroke-opacity', 0.5);}
+							   if (!link.data.sourceConfig.displaySettings.opaque) {linkPath.attr('stroke-opacity', link.data.sourceConfig.displaySettings.linkOpacity);}
 
 					ui.append(linkPath);
 					link.data.UI.fullUI = ui;
@@ -4642,7 +4661,7 @@ button:hover {
 
 input {
 	width:100px;
-	//height:20px;
+	height:20px;
 	margin:2px;
 	border-radius: 6px;
 	background-color: #b3ffff;
@@ -4654,7 +4673,7 @@ input {
 .dynamic{
 	background-color: #1a1a1a;
 	margin-top:2px;
-	height:15px; 
+	height:20px; 
 	border-width: 1px;
 	border-color: black;
 	color: gray;
@@ -4663,7 +4682,7 @@ input {
 .dynamic2
 {
 	width:80px;
-	height:12px;
+	height:20px;
 	margin:2px;
 	border-radius: 6px;
 	background-color: #b3ffff;
@@ -4674,7 +4693,8 @@ input {
 
 select {
 	width:100px;
-	//height:20px;
+	height:20px;
+	padding:0px;
 	margin:2px;
 	border-radius: 6px;
 	background-color: #b3ffff;
@@ -4774,7 +4794,49 @@ hr {
     //0% { -webkit-transform: translateX(0%); }
     //100% { -webkit-transform: translateX(-100%); }
 }
-		
+
+.glassEffect{
+
+  background: url(data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/Pgo8c3ZnIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgdmlld0JveD0iMCAwIDEgMSIgcHJlc2VydmVBc3BlY3RSYXRpbz0ibm9uZSI+CiAgPGxpbmVhckdyYWRpZW50IGlkPSJncmFkLXVjZ2ctZ2VuZXJhdGVkIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgeDE9IjAlIiB5MT0iMCUiIHgyPSIwJSIgeTI9IjEwMCUiPgogICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzYwNjc2OCIgc3RvcC1vcGFjaXR5PSIwLjMiLz4KICAgIDxzdG9wIG9mZnNldD0iMyUiIHN0b3AtY29sb3I9IiNiYmJiYmIiIHN0b3Atb3BhY2l0eT0iMC4zIi8+CiAgICA8c3RvcCBvZmZzZXQ9IjI3JSIgc3RvcC1jb2xvcj0iI2JiYmJiYiIgc3RvcC1vcGFjaXR5PSIwLjMiLz4KICAgIDxzdG9wIG9mZnNldD0iMjglIiBzdG9wLWNvbG9yPSIjMDAwMDAwIiBzdG9wLW9wYWNpdHk9IjAuMyIvPgogICAgPHN0b3Agb2Zmc2V0PSI3MyUiIHN0b3AtY29sb3I9IiMwMDAwMDAiIHN0b3Atb3BhY2l0eT0iMC4zIi8+CiAgICA8c3RvcCBvZmZzZXQ9Ijg4JSIgc3RvcC1jb2xvcj0iIzRiNTA1MSIgc3RvcC1vcGFjaXR5PSIwLjMiLz4KICAgIDxzdG9wIG9mZnNldD0iOTclIiBzdG9wLWNvbG9yPSIjMDAwMDAwIiBzdG9wLW9wYWNpdHk9IjAuMyIvPgogICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMDAwMDAwIiBzdG9wLW9wYWNpdHk9IjAuMyIvPgogIDwvbGluZWFyR3JhZGllbnQ+CiAgPHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjEiIGhlaWdodD0iMSIgZmlsbD0idXJsKCNncmFkLXVjZ2ctZ2VuZXJhdGVkKSIgLz4KPC9zdmc+);
+    background: -moz-linear-gradient(top,
+      rgba(96,103,104,0.3) 0%,
+      rgba(187,187,187,0.3) 3%,
+      rgba(187,187,187,0.3) 27%,
+      rgba(0,0,0,0.3) 28%,
+      rgba(0,0,0,0.3) 60%,
+      rgba(0,0,0,0.3) 73%,
+      rgba(75,80,81,0.3) 88%,
+      rgba(0,0,0,0.3) 97%,
+      rgba(0,0,0,0.3) 100%); /* FF3.6+ */
+    background: -webkit-gradient(linear, left top, left bottom,
+      color-stop(0%,rgba(96,103,104,0.3)),
+      color-stop(3%,rgba(187,187,187,0.3)),
+      color-stop(27%,rgba(187,187,187,0.3)),
+      color-stop(28%,rgba(0,0,0,0.3)),
+      color-stop(60%,rgba(0,0,0,0.3)),
+      color-stop(73%,rgba(0,0,0,0.3)),
+      color-stop(88%,rgba(75,80,81,0.3)),
+      color-stop(97%,rgba(0,0,0,0.3)),
+      color-stop(100%,rgba(0,0,0,0.3))); /* Chrome,Safari4+ */
+    background: -webkit-linear-gradient(top,  rgba(96,103,104,0.3) 0%,rgba(187,187,187,0.3) 3%,rgba(187,187,187,0.3) 27%,rgba(0,0,0,0.3) 28%,rgba(0,0,0,0.3) 60%,rgba(0,0,0,0.3) 73%,rgba(75,80,81,0.3) 88%,rgba(0,0,0,0.3) 97%,rgba(0,0,0,0.3) 100%); /* Chrome10+,Safari5.1+ */
+    background: -o-linear-gradient(top,  rgba(96,103,104,0.3) 0%,rgba(187,187,187,0.3) 3%,rgba(187,187,187,0.3) 27%,rgba(0,0,0,0.3) 28%,rgba(0,0,0,0.3) 60%,rgba(0,0,0,0.3) 73%,rgba(75,80,81,0.3) 88%,rgba(0,0,0,0.3) 97%,rgba(0,0,0,0.3) 100%); /* Opera 11.10+ */
+    background: -ms-linear-gradient(top,  rgba(96,103,104,0.3) 0%,rgba(187,187,187,0.3) 3%,rgba(187,187,187,0.3) 27%,rgba(0,0,0,0.3) 28%,rgba(0,0,0,0.3) 60%,rgba(0,0,0,0.3) 73%,rgba(75,80,81,0.3) 88%,rgba(0,0,0,0.3) 97%,rgba(0,0,0,0.3) 100%); /* IE10+ */
+    background: linear-gradient(to bottom,  rgba(96,103,104,0.3) 0%,rgba(187,187,187,0.3) 3%,rgba(187,187,187,0.3) 27%,rgba(0,0,0,0.3) 28%,rgba(0,0,0,0.3) 60%,rgba(0,0,0,0.3) 73%,rgba(75,80,81,0.3) 88%,rgba(0,0,0,0.3) 97%,rgba(0,0,0,0.3) 100%); /* W3C */
+
+    border-color: rgba(0, 0, 0, 0.6);
+    border-image: none;
+    border-style: solid;
+    border-width: 1px;
+  
+    box-shadow:
+      0 1px 0 0 rgba(255, 255, 255, 0.4) inset,
+      0 2px 6px rgba(0, 0, 0, 0.5),
+      0 10px rgba(0, 0, 0, 0.05) inset;
+
+}
+
+}
+
     </style>
 </head>
 

@@ -27,7 +27,6 @@ configManager.configs.push({
 			,{name:"panel.simplequery", parent:"leftColumn", available:true, visible:true, icon:"glyphicon glyphicon-search", desc:"query"}
 			,{name:"panel.functions", parent:"leftColumn", available:true, visible:false, icon:"glyphicon glyphicon-th-large", desc:"functions"}
 			,{name:"panel.monitoring", parent:"leftColumn", available:true, visible:true, icon:"glyphicon glyphicon-asterisk", desc:"monitoring"}
-			
 			,{name:"panel.entity.create", parent:"rightColumn", available:true, visible:true, icon:"glyphicon glyphicon-plus-sign", desc:"create entity"}
 			,{name:"panel.relationship.create", parent:"rightColumn", available:true, visible:true, icon:"glyphicon glyphicon-registration-mark", desc:"create relationship"}
 			,{name:"panel.bulkactions", parent:"rightColumn", available:true, visible:true, icon:"glyphicon glyphicon-list", desc:"bulk actions"}
@@ -49,7 +48,7 @@ configManager.configs.push({
 			,highlightColor:"#99ff33"
 			,focusColor:"red"
 			
-			,entityShape:"rect"
+			,entityShape:"circle"
 			,entityRgbRange:{min:40,max:140}/*The 4bit rgb range from which label colors can be automatically generated.*/			
 			,entityLabelColor:"white"
 			,entityBorderColor:null /*null=auto-color*/
@@ -60,12 +59,15 @@ configManager.configs.push({
 			,linkMainTextColor:"#d9d9d9"
 			,linkSubTextColor:"#ffa64d"
 			,linkThickness: 3
+			,linkOpacity:1
 			
 			,opaque:false
 			,labelSizing:"fontsize" /*choices: "hyphenate" (make labels shorter) "fontsize" (make the font size smaller) "" (no sizing, labels may extend past the boundaries of the node)*/
 			
 			/*effects...*/
 			,haze:true /*...outer node haze*/
+			//,textHaze:true /*...node text haze*/
+			,glass:false /*...node text haze*/
 			,highlightHaze:true /*...outer node haze*/
 			,shadow:false /*...outer node shadow*/
 			,glow:false /*...outer node glow*/
